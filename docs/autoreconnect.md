@@ -313,18 +313,37 @@ ImageMagick（SVG→ICO）、WireGuardNT（要嵌入的 dll/sys）。全部带 s
 `installer/dist/wireguard-amd64-<版本>.msi`（CI 也会一并构建并发布）。它沿用官方的 UpgradeCode，
 所以能**正常覆盖/升级官方版本**，装完出现在「应用」列表里，可以正常卸载。
 
-实测（2026-09-23，在本机覆盖官方版安装）：**隧道配置完好**（`Data` 目录没被动）、服务自动重启、
-看门狗正常起来、开始菜单快捷方式已创建。两个需要注意的代价：
+实测（2026-09-23，在本机做了两轮覆盖安装：官方版 → 本版本，以及**重建出来的同版本 MSI 再装一次**，
+两次都读了 `msiexec` 的完整日志）：
 
+- **隧道配置完好**。`Data` 目录（含 `HOME.conf.dpapi`）两次都没被动、字节数不变；
+  适配器也没被删，仍在 `Up`；开始菜单快捷方式已创建。
+- **安装过程会重启三个进程，隧道断几秒**。`customactions.c` 的 `KillWireGuardProcesses`
+  在安装事务里必然被设置（`WireGuardExecutable` 组件"将被安装"那一支），实测管理器 / 隧道服务 /
+  托盘进程的创建时间都变成了安装那一刻；看门狗日志里 `stopping watchdog` 到 `watching …`
+  相隔约 **2 秒**，隧道由服务控制器的故障恢复自己拉回来。**升级前知道这一点是必要的。**
+- **每次重建出来的 MSI 都算"新产品"**。`<Product Id="*">` 意味着 ProductCode 每次自动生成，
+  所以装一个新构建就是一次完整的升级事务（旧产品注销、新产品注册）。实测「应用」列表里
+  始终只有 **1 条**，ProductCode 从 `{42A442DA…}` 变成 `{BFA67D05…}`。
+- **升级为什么不删配置**（机制，从日志读出，不是猜）：新旧包用的是**同一批组件 GUID**，
+  安装事务里新包执行 `RegisterSharedComponentProvider` 认领了 `WireGuardExecutable`，
+  旧包卸载时只是 `UnregisterSharedComponentProvider` 交回份额，组件本身不会被移除。
+  于是旧产品那一侧的组件动作既不是"将被安装"也不是"将被卸载"，
+  `RemoveConfigFolder` / `RemoveAdapters` 虽按计划被调度，但 `CustomActionData` 是空的，
+  等于什么都没做 —— 日志里可以直接看到这三种调度参数的差别。
 - **不含 `wg.exe`**。上游 Windows 仓库的根目录里没有 `wg/`（命令行工具的源码不在其中），
   所以没有东西可以构建它，也不适合把官方签名过的那个打包进来。用这个 MSI 覆盖官方版时，
   官方 MSI 的卸载流程会把它的 `wg.exe` 一并带走 —— 这是**唯一的功能损失**，
   命令行能看的信息在 GUI 的「隧道检测状态」里都有。想保留 `wg.exe` 就用方式二，
   或从官方 MSI 里取回来：`msiexec /a wireguard-amd64-1.1.1.msi /qn TARGETDIR=%TEMP%\wg`
   然后复制 `%TEMP%\wg\WireGuard\wg.exe`。
-- **卸载会删配置**。`RemoveConfigFolder` 会递归删除 `Data` 目录（`customactions.c`，官方行为），
-  卸载前先在 GUI 里导出隧道。**升级安装不会触发它**：`EvaluateWireGuardComponents` 只在组件状态是
-  "将被卸载"（`INSTALLSTATE_REMOVED`）时才设置那几个属性，升级时是"将被安装"。
+- **卸载会删配置**。`RemoveConfigFolder` 会递归删除 `<安装目录>\Data`，并删掉
+  `HKLM\Software\WireGuard`（`customactions.c`，官方行为）。**这一条一定会执行**：
+  卸载时组件状态是 `INSTALLSTATE_ABSENT`(2) 或 `INSTALLSTATE_REMOVED`(1)，
+  两者都落在 `component_action >= INSTALLSTATE_REMOVED` 那一支里。卸载前先在 GUI 里导出隧道。
+- **版本号固定为 1.1.1，而包上写着 `AllowDowngrades="no"`**。所以哪天官方出了 1.1.2 并装上了，
+  这份 1.1.1 的 MSI 会被拒绝（`A newer version of WireGuard is already installed`）：
+  要么把 `version/version.go` 的号往上抬，要么改用方式二（文件替换不受版本号约束）。
 
 ### 方式二：替换可执行文件
 
