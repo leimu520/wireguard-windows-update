@@ -345,6 +345,32 @@ ImageMagick（SVG→ICO）、WireGuardNT（要嵌入的 dll/sys）。全部带 s
   这份 1.1.1 的 MSI 会被拒绝（`A newer version of WireGuard is already installed`）：
   要么把 `version/version.go` 的号往上抬，要么改用方式二（文件替换不受版本号约束）。
 
+#### 全新机器上能用吗
+
+能，能力和官方安装包一致，差别只有 `wg.exe`。这不是推断，是三个可以核对的事实：
+
+1. **官方 MSI 自己也不含驱动**。两个包做"管理安装"解包对比：官方 1.1.1 里是
+   `wireguard.exe` + `wg.exe`，本仓库的 MSI 里是 `wireguard.exe`。也就是说，"装完就能用"
+   这件事从来不靠安装包铺驱动。
+2. **驱动是运行时按需安装的**。源码里没有任何 `SetupCopyOEMInf` / `DiInstallDriver` /
+   `.inf` 处理；驱动由 `wireguard.dll`（以 named `RT_RCDATA` 内嵌在 exe 里）在首次创建适配器时
+   装进系统。本机旁证：`C:\Windows\System32\drivers\wireguard.sys`（WireGuard Driver 1.1、
+   WireGuard LLC 签名）存在，而 `C:\Windows\INF\oem18.inf` 指向 WireGuard —— 这是走标准驱动
+   安装路径留下的，而两个 MSI 都不含 INF，所以只能是运行时装的。
+3. **服务同样由程序创建**。安装包的自定义动作只是"枚举已有的 WireGuard 服务，在升级时停、
+   在卸载时删"，它不创建服务；管理器服务由 `wireguard.exe /installmanagerservice` 创建，
+   GUI 在发现服务不存在时会自动提权调用它（`main.go` 的 `execElevatedManagerServiceInstaller`）。
+
+所以全新机器上的顺序是：双击 MSI → 打开 WireGuard（首次会提权把管理器服务装好并启动）→
+导入隧道配置 → 激活（这一步装驱动，多花一两秒）→ 通。
+
+另外三点：安装包**不含 `wg.exe`**（需要就一并复制过去）；**卸载会删隧道配置**；
+**没有代码签名**，首次运行会有 SmartScreen 提示；`CheckWinVer` 会在系统不支持时直接报错退出，
+不会装到一半。
+
+> 这三条是"文件清单 + 代码路径"级别的证据，**没有在真正的全新机器上实测过**（本机是覆盖安装，
+> 驱动早就存在）。要在全新机器上确信，装完照本文的验证清单看一眼日志即可。
+
 ### 方式二：替换可执行文件
 
 **已装官方版的机器，直接覆盖这个 exe 就行**，不需要卸载、不需要重装、配置文件与 WireGuardNT
