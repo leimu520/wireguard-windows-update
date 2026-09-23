@@ -72,6 +72,20 @@ func (conf *Config) ToWgQuick() string {
 	}
 	writeField(conf.Interface.Comments, "Table", conf.Interface.TableOff, table)
 
+	// Mirroring Table above: only spell these out when they are set, so that a
+	// config that never mentions them keeps round-tripping unchanged.
+	reconnect := "on"
+	if conf.Interface.AutoReconnectOff {
+		reconnect = "off"
+	}
+	writeField(conf.Interface.Comments, "AutoReconnect", conf.Interface.AutoReconnectOff, reconnect)
+	writeField(conf.Interface.Comments, "ReconnectMethod", len(conf.Interface.ReconnectMethod) > 0, conf.Interface.ReconnectMethod)
+	writeField(conf.Interface.Comments, "ReconnectProbe", len(conf.Interface.ReconnectProbe) > 0, conf.Interface.ReconnectProbe)
+	writeField(conf.Interface.Comments, "ReconnectInterval", conf.Interface.ReconnectInterval > 0, conf.Interface.ReconnectInterval)
+	writeField(conf.Interface.Comments, "ReconnectTimeout", conf.Interface.ReconnectTimeout > 0, conf.Interface.ReconnectTimeout)
+	writeField(conf.Interface.Comments, "ReconnectThreshold", conf.Interface.ReconnectThreshold > 0, conf.Interface.ReconnectThreshold)
+	writeField(conf.Interface.Comments, "ReconnectWebhook", len(conf.Interface.ReconnectWebhook) > 0, conf.Interface.ReconnectWebhook)
+
 	for _, peer := range conf.Peers {
 		output.WriteByte('\n')
 		writeLine(peer.Comments.Header, "[Peer]")

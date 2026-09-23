@@ -8,6 +8,7 @@ package conf
 import (
 	"encoding/base64"
 	"net/netip"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -116,6 +117,73 @@ func parseTableOff(s string) (bool, error) {
 	}
 	_, err := strconv.ParseUint(s, 10, 32)
 	return false, err
+}
+
+func parseOnOff(s string) (bool, error) {
+	switch strings.ToLower(s) {
+	case "on", "true", "yes", "1":
+		return true, nil
+	case "off", "false", "no", "0":
+		return false, nil
+	}
+	return false, &ParseError{l18n.Sprintf("Invalid on/off value"), s}
+}
+
+// parseProbeTarget accepts the host:port form used by the reconnect probe, with
+// an optional /path suffix that only the http method makes use of.
+func parseProbeTarget(s string) (string, error) {
+	address, path, hasPath := strings.Cut(s, "/")
+	if _, err := parseEndpoint(address); err != nil {
+		return "", err
+	}
+	if hasPath && len(path) != 0 && strings.ContainsAny(path, " \t") {
+		return "", &ParseError{l18n.Sprintf("Invalid probe path"), s}
+	}
+	return s, nil
+}
+
+func parseReconnectMethod(s string) (string, error) {
+	switch strings.ToLower(s) {
+	case "http", "tcp":
+		return strings.ToLower(s), nil
+	}
+	return "", &ParseError{l18n.Sprintf("Probe method must be http or tcp"), s}
+}
+
+// ValidateProbeTarget reports whether s is an acceptable ReconnectProbe value.
+// It exists so that the user interface can reject a bad probe target in the
+// same words the configuration parser would use, instead of keeping a second
+// copy of the rules that could drift.
+func ValidateProbeTarget(s string) error {
+	_, err := parseProbeTarget(s)
+	return err
+}
+
+// parseBoundedUint parses a positive number that has to fit in a uint16.
+func parseBoundedUint(s, what string) (uint16, error) {
+	m, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, &ParseError{l18n.Sprintf("Invalid %s", what), s}
+	}
+	if m < 1 || m > 65535 {
+		return 0, &ParseError{l18n.Sprintf("%s must be between 1 and 65535", what), s}
+	}
+	return uint16(m), nil
+}
+
+// parseWebhookURL accepts an absolute http or https URL.
+func parseWebhookURL(s string) (string, error) {
+	parsed, err := url.Parse(s)
+	if err != nil {
+		return "", &ParseError{l18n.Sprintf("Invalid webhook URL: %v", err), s}
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", &ParseError{l18n.Sprintf("Webhook URL must use http or https"), s}
+	}
+	if len(parsed.Host) == 0 {
+		return "", &ParseError{l18n.Sprintf("Webhook URL is missing a host"), s}
+	}
+	return s, nil
 }
 
 func parseKeyBase64(s string) (*Key, error) {
@@ -303,6 +371,48 @@ func FromWgQuick(s, name string) (*Config, error) {
 					return nil, err
 				}
 				conf.Interface.TableOff = tableOff
+			case "autoreconnect":
+				enabled, err := parseOnOff(val)
+				if err != nil {
+					return nil, err
+				}
+				conf.Interface.AutoReconnectOff = !enabled
+			case "reconnectmethod":
+				method, err := parseReconnectMethod(val)
+				if err != nil {
+					return nil, err
+				}
+				conf.Interface.ReconnectMethod = method
+			case "reconnectprobe":
+				probe, err := parseProbeTarget(val)
+				if err != nil {
+					return nil, err
+				}
+				conf.Interface.ReconnectProbe = probe
+			case "reconnectinterval":
+				seconds, err := parseBoundedUint(val, l18n.Sprintf("probe interval"))
+				if err != nil {
+					return nil, err
+				}
+				conf.Interface.ReconnectInterval = seconds
+			case "reconnecttimeout":
+				seconds, err := parseBoundedUint(val, l18n.Sprintf("probe timeout"))
+				if err != nil {
+					return nil, err
+				}
+				conf.Interface.ReconnectTimeout = seconds
+			case "reconnectthreshold":
+				count, err := parseBoundedUint(val, l18n.Sprintf("failure threshold"))
+				if err != nil {
+					return nil, err
+				}
+				conf.Interface.ReconnectThreshold = count
+			case "reconnectwebhook":
+				webhook, err := parseWebhookURL(val)
+				if err != nil {
+					return nil, err
+				}
+				conf.Interface.ReconnectWebhook = webhook
 			default:
 				return nil, &ParseError{l18n.Sprintf("Invalid key for [Interface] section"), key}
 			}
@@ -433,6 +543,22 @@ func FromDriverConfiguration(interfaze *driver.Interface, existingConfig *Config
 			PreDown:   existingConfig.Interface.PreDown,
 			PostDown:  existingConfig.Interface.PostDown,
 			TableOff:  existingConfig.Interface.TableOff,
+
+			// The driver knows nothing about these. They are client-side
+			// policy that only ever lives in the configuration file, so they
+			// have to be carried across from the stored configuration
+			// explicitly. Leaving them out would be invisible in the file but
+			// visible in the interface: the configuration view shows the
+			// runtime configuration while a tunnel is up and the stored one
+			// while it is down, so a tunnel would appear to lose its reconnect
+			// settings simply by being started.
+			AutoReconnectOff:   existingConfig.Interface.AutoReconnectOff,
+			ReconnectMethod:    existingConfig.Interface.ReconnectMethod,
+			ReconnectProbe:     existingConfig.Interface.ReconnectProbe,
+			ReconnectInterval:  existingConfig.Interface.ReconnectInterval,
+			ReconnectTimeout:   existingConfig.Interface.ReconnectTimeout,
+			ReconnectThreshold: existingConfig.Interface.ReconnectThreshold,
+			ReconnectWebhook:   existingConfig.Interface.ReconnectWebhook,
 		},
 	}
 	if interfaze.Flags&driver.InterfaceHasPrivateKey != 0 {

@@ -53,6 +53,37 @@ type Interface struct {
 	PostDown   string
 	TableOff   bool
 
+	// AutoReconnectOff disables the endpoint re-resolution watchdog that
+	// otherwise runs for every peer whose Endpoint is a hostname rather than a
+	// literal address. It is named after the "off" spelling of the
+	// AutoReconnect key, in the same way TableOff mirrors "Table = off", so
+	// that the default of a missing key is "enabled".
+	AutoReconnectOff bool
+
+	// ReconnectMethod is how ReconnectProbe is probed: "http" to make a request
+	// and treat any answer as proof that the tunnel works, or "tcp" to settle
+	// for a completed connection. Empty means http.
+	ReconnectMethod string
+
+	// ReconnectProbe is an optional host:port inside the tunnel, with an
+	// optional /path suffix for the http method, such as 10.122.10.1:80. When
+	// set it is the health signal; when empty the age of the peer's last
+	// handshake is used instead.
+	ReconnectProbe string
+
+	// ReconnectInterval, ReconnectTimeout and ReconnectThreshold are the probe
+	// interval, the per-probe timeout and how many consecutive failures are
+	// tolerated, in seconds and count respectively. Zero means "use the
+	// default", so that a configuration that does not mention them behaves the
+	// same as one that spells the defaults out.
+	ReconnectInterval  uint16
+	ReconnectTimeout   uint16
+	ReconnectThreshold uint16
+
+	// ReconnectWebhook is an optional URL that receives a text payload
+	// whenever the watchdog declares the tunnel down, recovers it, or fails to.
+	ReconnectWebhook string
+
 	Comments SectionComments
 }
 
