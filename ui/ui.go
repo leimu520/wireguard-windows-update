@@ -79,7 +79,13 @@ func RunUI() {
 					tray.UpdateFound()
 				}
 			case manager.UpdateStateUpdatesDisabledUnofficialBuild:
-				mtw.SetTitle(l18n.Sprintf("%s (unsigned build, no updates)", mtw.Title()))
+				// The updater declines to run for an executable it cannot
+				// verify, which is the right call for a modified build:
+				// replacing it with a stock one would quietly throw the
+				// reconnect feature away. The title is left as it is rather than
+				// stamped with "(unsigned build, no updates)", because the
+				// window already says which build this is and there is nothing
+				// the reader could do about the warning anyway.
 			}
 		})
 	}

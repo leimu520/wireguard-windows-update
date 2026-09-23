@@ -95,6 +95,28 @@ func NewTunnelsPage() (*TunnelsPage, error) {
 	hlayout.SetMargins(walk.Margins{})
 	controlsContainer.SetLayout(hlayout)
 
+	// These two sit ahead of the spacer so that they end up at the left edge of
+	// the bar, under the tunnel list, rather than next to Edit on the right.
+	reconnectStatusButton, err := walk.NewPushButton(controlsContainer)
+	if err != nil {
+		return nil, err
+	}
+	reconnectStatusButton.SetText(l18n.Sprintf("&Reconnect status"))
+	reconnectStatusButton.SetToolTipText(l18n.Sprintf("Probe this tunnel from the inside and show what comes back: the current endpoint, how long ago the last handshake was, whether a probe answers and how long it takes. Refreshes on its own."))
+	reconnectStatusButton.SetEnabled(false)
+	reconnectStatusButton.SetVisible(IsAdmin)
+	reconnectStatusButton.Clicked().Attach(tp.onReconnectStatus)
+
+	reconnectParamsButton, err := walk.NewPushButton(controlsContainer)
+	if err != nil {
+		return nil, err
+	}
+	reconnectParamsButton.SetText(l18n.Sprintf("Reconnect &parameters"))
+	reconnectParamsButton.SetToolTipText(l18n.Sprintf("Turn automatic reconnecting on or off for this tunnel, and change what is probed, how often, with what timeout, and after how many failures something is done about it."))
+	reconnectParamsButton.SetEnabled(false)
+	reconnectParamsButton.SetVisible(IsAdmin)
+	reconnectParamsButton.Clicked().Attach(tp.onReconnectSettings)
+
 	walk.NewHSpacer(controlsContainer)
 
 	editTunnel, err := walk.NewPushButton(controlsContainer)
@@ -103,7 +125,10 @@ func NewTunnelsPage() (*TunnelsPage, error) {
 	}
 	editTunnel.SetEnabled(false)
 	tp.listView.CurrentIndexChanged().Attach(func() {
-		editTunnel.SetEnabled(tp.listView.CurrentIndex() > -1)
+		hasSelection := tp.listView.CurrentIndex() > -1
+		editTunnel.SetEnabled(hasSelection)
+		reconnectStatusButton.SetEnabled(hasSelection)
+		reconnectParamsButton.SetEnabled(hasSelection)
 	})
 	editTunnel.SetText(l18n.Sprintf("&Edit"))
 	editTunnel.Clicked().Attach(tp.onEditTunnel)
@@ -460,16 +485,37 @@ func (tp *TunnelsPage) onEditTunnel() {
 	}
 
 	if config := runEditDialog(tp.Form(), tunnel); config != nil {
-		go func() {
-			priorState, err := tunnel.State()
-			tunnel.Delete()
-			tunnel.WaitForStop()
-			tunnel, err2 := manager.IPCClientNewTunnel(config)
-			if err == nil && err2 == nil && (priorState == manager.TunnelStarting || priorState == manager.TunnelStarted) {
-				tunnel.Start()
-			}
-		}()
+		tp.applyTunnelConfig(tunnel, config)
 	}
+}
+
+func (tp *TunnelsPage) onReconnectStatus() {
+	runReconnectStatusDialog(tp.Form(), tp.listView.CurrentTunnel())
+}
+
+func (tp *TunnelsPage) onReconnectSettings() {
+	tunnel := tp.listView.CurrentTunnel()
+	if tunnel == nil {
+		return
+	}
+	if config := runReconnectSettingsDialog(tp.Form(), tunnel); config != nil {
+		tp.applyTunnelConfig(tunnel, config)
+	}
+}
+
+// applyTunnelConfig stores a changed configuration and brings the tunnel back
+// up if it was running, because the tunnel service reads its configuration once
+// and only then.
+func (tp *TunnelsPage) applyTunnelConfig(previous *manager.Tunnel, config *conf.Config) {
+	go func() {
+		priorState, err := previous.State()
+		previous.Delete()
+		previous.WaitForStop()
+		tunnel, err2 := manager.IPCClientNewTunnel(config)
+		if err == nil && err2 == nil && (priorState == manager.TunnelStarting || priorState == manager.TunnelStarted) {
+			tunnel.Start()
+		}
+	}()
 }
 
 func (tp *TunnelsPage) onAddTunnel() {

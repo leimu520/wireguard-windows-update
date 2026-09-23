@@ -17,6 +17,12 @@ import (
 	"golang.zx2c4.com/wireguard/windows/manager"
 )
 
+// ProductName is what this build calls itself, in the window title, the tray
+// tooltip and the file properties. It is deliberately written out rather than
+// routed through the translation catalog: it is a name, not a phrase, and it
+// should read the same in every language the interface is switched to.
+const ProductName = "WireGuard 专版"
+
 type ManageTunnelsWindow struct {
 	walk.FormBase
 
@@ -69,7 +75,7 @@ func NewManageTunnelsWindow() (*ManageTunnelsWindow, error) {
 	if icon, err := loadLogoIcon(32); err == nil {
 		mtw.SetIcon(icon)
 	}
-	mtw.SetTitle("WireGuard")
+	mtw.SetTitle(ProductName)
 	mtw.SetFont(font)
 	mtw.SetSize(walk.Size{675, 525})
 	mtw.SetMinMaxSize(walk.Size{500, 400}, walk.Size{0, 0})
