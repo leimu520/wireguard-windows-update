@@ -331,12 +331,13 @@ ImageMagick（SVG→ICO）、WireGuardNT（要嵌入的 dll/sys）。全部带 s
   于是旧产品那一侧的组件动作既不是"将被安装"也不是"将被卸载"，
   `RemoveConfigFolder` / `RemoveAdapters` 虽按计划被调度，但 `CustomActionData` 是空的，
   等于什么都没做 —— 日志里可以直接看到这三种调度参数的差别。
-- **不含 `wg.exe`**。上游 Windows 仓库的根目录里没有 `wg/`（命令行工具的源码不在其中），
-  所以没有东西可以构建它，也不适合把官方签名过的那个打包进来。用这个 MSI 覆盖官方版时，
-  官方 MSI 的卸载流程会把它的 `wg.exe` 一并带走 —— 这是**唯一的功能损失**，
-  命令行能看的信息在 GUI 的「隧道检测状态」里都有。想保留 `wg.exe` 就用方式二，
-  或从官方 MSI 里取回来：`msiexec /a wireguard-amd64-1.1.1.msi /qn TARGETDIR=%TEMP%\wg`
-  然后复制 `%TEMP%\wg\WireGuard\wg.exe`。
+- **`wg.exe` 也在包里**。命令行工具不在这个 Go 树里 —— 它是 **wireguard-tools** 项目的 C 代码，
+  上游 `build.bat` 也是**下载**它（pin 的修订版 + pin 的 sha256）再用 llvm-mingw 编译的。
+  本仓库的 `build-amd64.sh` 做同样的事：同一个 commit、同一个哈希、同一套工具链，
+  编出 `amd64/wg.exe`。实测输出与官方的逐字一致，组件也沿用官方的 GUID
+  （`540cf446-fcc3-4452-b9fb-eb4c02780251`），所以覆盖官方版时它的 `wg.exe` 会被**替换**成
+  我们的构建，而不是被带走 —— 这一点修正过：最初这版 MSI 没带 wg.exe，实测覆盖安装后
+  官方的 `wg.exe` 果然被移除了，后来才补上。
 - **卸载会删配置**。`RemoveConfigFolder` 会递归删除 `<安装目录>\Data`，并删掉
   `HKLM\Software\WireGuard`（`customactions.c`，官方行为）。**这一条一定会执行**：
   卸载时组件状态是 `INSTALLSTATE_ABSENT`(2) 或 `INSTALLSTATE_REMOVED`(1)，
@@ -347,11 +348,11 @@ ImageMagick（SVG→ICO）、WireGuardNT（要嵌入的 dll/sys）。全部带 s
 
 #### 全新机器上能用吗
 
-能，能力和官方安装包一致，差别只有 `wg.exe`。这不是推断，是三个可以核对的事实：
+能，能力和官方安装包一致。这不是推断，是三个可以核对的事实：
 
 1. **官方 MSI 自己也不含驱动**。两个包做"管理安装"解包对比：官方 1.1.1 里是
-   `wireguard.exe` + `wg.exe`，本仓库的 MSI 里是 `wireguard.exe`。也就是说，"装完就能用"
-   这件事从来不靠安装包铺驱动。
+   `wireguard.exe` + `wg.exe`，本仓库的 MSI 里也是这两样（`wg.exe` 由同一 pin 的
+   wireguard-tools 快照编译）。也就是说，"装完就能用"这件事从来不靠安装包铺驱动。
 2. **驱动是运行时按需安装的**。源码里没有任何 `SetupCopyOEMInf` / `DiInstallDriver` /
    `.inf` 处理；驱动由 `wireguard.dll`（以 named `RT_RCDATA` 内嵌在 exe 里）在首次创建适配器时
    装进系统。本机旁证：`C:\Windows\System32\drivers\wireguard.sys`（WireGuard Driver 1.1、
@@ -364,18 +365,17 @@ ImageMagick（SVG→ICO）、WireGuardNT（要嵌入的 dll/sys）。全部带 s
 所以全新机器上的顺序是：双击 MSI → 打开 WireGuard（首次会提权把管理器服务装好并启动）→
 导入隧道配置 → 激活（这一步装驱动，多花一两秒）→ 通。
 
-另外三点：安装包**不含 `wg.exe`**（需要就一并复制过去）；**卸载会删隧道配置**；
-**没有代码签名**，首次运行会有 SmartScreen 提示；`CheckWinVer` 会在系统不支持时直接报错退出，
-不会装到一半。
+另外三点：**卸载会删隧道配置**；**没有代码签名**，首次运行会有 SmartScreen 提示；
+`CheckWinVer` 会在系统不支持时直接报错退出，不会装到一半。
 
 > 这三条是"文件清单 + 代码路径"级别的证据，**没有在真正的全新机器上实测过**（本机是覆盖安装，
 > 驱动早就存在）。要在全新机器上确信，装完照本文的验证清单看一眼日志即可。
 
-### 方式二：替换可执行文件
+### 方式二：替换可执行文件（不产生安装记录）
 
 **已装官方版的机器，直接覆盖这个 exe 就行**，不需要卸载、不需要重装、配置文件与 WireGuardNT
 驱动都不动：换掉的只有 `wireguard.exe` 一个文件，它跟驱动之间的接口和官方版完全一样。
-这种方式**不会碰 `wg.exe`**。
+这种方式不产生 Windows 的安装记录，也不会在卸载时删配置。
 
 **最省事的做法是双击 `install.bat`**（它自己请求管理员权限）。有个常见误解值得先澄清：
 `wireguard.exe` **不是安装程序**，双击它是"启动客户端"，不会注册服务、不会往别处复制文件。

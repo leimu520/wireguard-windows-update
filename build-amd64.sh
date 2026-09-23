@@ -3,14 +3,22 @@
 #
 # Build amd64/wireguard.exe from Git Bash on a Windows box.
 #
-# This mirrors what the upstream build.bat does, but downloads only the pieces
-# that are needed for amd64 and skips wg.exe:
+# This mirrors what the upstream build.bat does, but only for amd64:
 #
-#   Go            compiles the program
-#   llvm-mingw    provides the x86_64-w64-mingw32-windres resource compiler
-#   ImageMagick   converts ui/icon/*.svg into the .ico files resources.rc wants
-#   WireGuardNT   provides wireguard.dll and wireguard.sys, embedded into the
-#                 executable as RCDATA resources
+#   Go              compiles the program
+#   llvm-mingw      provides the x86_64-w64-mingw32-windres resource compiler
+#                   and the gcc that builds wg.exe
+#   ImageMagick     converts ui/icon/*.svg into the .ico files resources.rc wants
+#   WireGuardNT     provides wireguard.dll and wireguard.sys, embedded into the
+#                   executable as RCDATA resources
+#   wireguard-tools the C command line tools, compiled into amd64/wg.exe
+#   make            drives the wireguard-tools build
+#
+# wg.exe is not part of this Go tree: the command line tool lives in the
+# separate wireguard-tools project, which is why the Windows repository has no
+# wg/ directory. Upstream build.bat downloads it at a pinned revision, checks a
+# pinned sha256, and compiles it with llvm-mingw; this script does the same
+# thing, at the same revision and with the same hash.
 #
 # The resources matter: the manifest is what gets the GUI the version 6 common
 # controls and per-monitor DPI, and ui/iconprovider.go loads the tray icon from
@@ -28,12 +36,13 @@
 # sha256,sha3} need the full set of cpu.X86Has*/ARM64 re-exports, so against the
 # pinned Go 1.27.1 it fails with a wall of "undefined: cpu.X86HasADX".
 #
-# Usage:  ./build-amd64.sh [--clean] [--deps-only] [--no-resources] [--overlay]
+# Usage:  ./build-amd64.sh [--clean] [--deps-only] [--no-resources] [--no-wg] [--overlay]
 #   --clean         throw away .deps first, forcing a fresh toolchain download
 #   --deps-only     only fetch the toolchain and pre-populate the module cache
 #   --no-resources  build without the resource section, and stage
 #                   wireguard.dll next to the executable instead. Fast, but the
 #                   GUI loses its manifest and its tray icon
+#   --no-wg         skip amd64/wg.exe, and the two downloads only it needs
 #   --overlay       also pass -overlay .overlay/overlay.json, as upstream does;
 #                   known to fail against Go 1.27.1, kept for comparison
 set -euo pipefail
@@ -41,12 +50,14 @@ set -euo pipefail
 DEPS_ONLY=
 CLEAN=
 NO_RESOURCES=
+NO_WG=
 USE_OVERLAY=
 for arg in "$@"; do
 	case "$arg" in
 		--clean) CLEAN=1 ;;
 		--deps-only) DEPS_ONLY=1 ;;
 		--no-resources) NO_RESOURCES=1 ;;
+		--no-wg) NO_WG=1 ;;
 		--overlay) USE_OVERLAY=1 ;;
 		*) echo "error: unknown argument $arg" >&2; exit 1 ;;
 	esac
@@ -75,6 +86,13 @@ IMAGEMAGICK_SHA="584e069f56456ce7dde40220948ff9568ac810688c892c5dfb7f6db902aa05a
 
 WGNT_URL="https://download.wireguard.com/wireguard-nt/wireguard-nt-1.1.zip"
 WGNT_SHA="dceb30a9bc4be48cce0f74160fc88a585a2c2627366e8f846fc6658f9038dace"
+
+# Both of these are the revisions upstream build.bat pins, at the same hashes.
+MAKE_URL="https://download.wireguard.com/windows-toolchain/distfiles/make-4.2.1-without-guile-w32-bin.zip"
+MAKE_SHA="30641be9602712be76212b99df7209f4f8f518ba764cf564262bc9d6e4047cc7"
+
+WGTOOLS_URL="https://git.zx2c4.com/wireguard-tools/snapshot/wireguard-tools-06a99cce2c9998f53eb30d2f258a9e5ff286445b.zip"
+WGTOOLS_SHA="b7a73e027cee3127f3cccba8ad3a08ea61ccd42d3ea5c28c548a8e0ec9e10cf6"
 
 find_python() {
 	for candidate in python3 python; do
@@ -161,12 +179,17 @@ if [ ! -f "$DEPS/wireguard-nt/bin/amd64/wireguard.dll" ]; then
 	unpack_zip "$DEPS/wireguard-nt.zip" "$DEPS" 0
 fi
 
-if [ -z "$NO_RESOURCES" ]; then
+# llvm-mingw is needed for the resource section, and for wg.exe either way,
+# since the wireguard-tools build wants both its windres and its gcc.
+if [ -z "$NO_RESOURCES" ] || [ -z "$NO_WG" ]; then
 	if [ ! -d "$DEPS/llvm-mingw" ]; then
 		fetch "$MINGW_URL" "" "$MINGW_SHA" "$DEPS/llvm-mingw.zip"
 		echo "[+] unpacking llvm-mingw"
 		unpack_zip "$DEPS/llvm-mingw.zip" "$DEPS/llvm-mingw" 1
 	fi
+fi
+
+if [ -z "$NO_RESOURCES" ]; then
 	if [ ! -d "$DEPS/imagemagick" ]; then
 		fetch "$IMAGEMAGICK_URL" "" "$IMAGEMAGICK_SHA" "$DEPS/imagemagick.zip"
 		echo "[+] unpacking ImageMagick"
@@ -174,7 +197,25 @@ if [ -z "$NO_RESOURCES" ]; then
 	fi
 fi
 
+if [ -z "$NO_WG" ]; then
+	if [ ! -x "$DEPS/make/make.exe" ]; then
+		fetch "$MAKE_URL" "" "$MAKE_SHA" "$DEPS/make.zip"
+		echo "[+] unpacking make"
+		unpack_zip "$DEPS/make.zip" "$DEPS/make" 1
+	fi
+	if [ ! -d "$DEPS/src" ]; then
+		fetch "$WGTOOLS_URL" "" "$WGTOOLS_SHA" "$DEPS/wireguard-tools.zip"
+		echo "[+] unpacking wireguard-tools"
+		unpack_zip "$DEPS/wireguard-tools.zip" "$DEPS/wireguard-tools" 1
+		rm -rf "$DEPS/src"
+		mv "$DEPS/wireguard-tools/src" "$DEPS/src"
+		rm -rf "$DEPS/wireguard-tools"
+	fi
+fi
+
 GOEXE="$DEPS/go/bin/go.exe"
+WINDRES="$DEPS/llvm-mingw/bin/x86_64-w64-mingw32-windres.exe"
+MINGW_CC="$DEPS/llvm-mingw/bin/x86_64-w64-mingw32-gcc.exe"
 export GOOS=windows
 export GOARCH=amd64
 export GOARM=7
@@ -202,7 +243,6 @@ if [ -z "$NO_RESOURCES" ]; then
 			"$(cygpath -w "$PWD/$ico")"
 	done
 
-	WINDRES="$DEPS/llvm-mingw/bin/x86_64-w64-mingw32-windres.exe"
 	if [ ! -x "$WINDRES" ]; then
 		echo "error: $WINDRES not found, cannot assemble the resource section" >&2
 		exit 1
@@ -230,6 +270,29 @@ rm -f amd64/wireguard.dll
 if [ -n "$NO_RESOURCES" ]; then
 	echo "[+] staging wireguard.dll next to the executable"
 	cp -f "$DEPS/wireguard-nt/bin/amd64/wireguard.dll" amd64/wireguard.dll
+fi
+
+# wg.exe is the C command line tool from wireguard-tools, not part of this Go
+# tree. It talks to the manager service over its named pipe, which is how it
+# can show the state of tunnels without knowing anything about the driver.
+if [ -z "$NO_WG" ]; then
+	MAKE="$DEPS/make/make.exe"
+	if [ ! -x "$MAKE" ] || [ ! -x "$MINGW_CC" ] || [ ! -x "$WINDRES" ]; then
+		echo "error: cannot build wg.exe: make, gcc or windres is missing from $DEPS" >&2
+		exit 1
+	fi
+	echo "[+] building amd64/wg.exe"
+	rm -f "$DEPS/src/wg.exe" "$DEPS/src"/*.o "$DEPS/src/wincompat"/*.o "$DEPS/src/wincompat"/*.lib 2>/dev/null
+	# The gcc resolves its own helpers, but the Makefile also shells out to the
+	# compiler by name in a few places, so its directory stays on PATH.
+	LDFLAGS="-s" PATH="$(dirname "$MINGW_CC"):$PATH" "$MAKE" --no-print-directory \
+		-C .deps/src PLATFORM=windows CC="$MINGW_CC" WINDRES="$WINDRES" V=1 \
+		RUNSTATEDIR= SYSTEMDUNITDIR= -j"${NUMBER_OF_PROCESSORS:-4}"
+	if [ ! -f "$DEPS/src/wg.exe" ]; then
+		echo "error: the wireguard-tools build produced no wg.exe" >&2
+		exit 1
+	fi
+	cp -f "$DEPS/src/wg.exe" amd64/wg.exe
 fi
 
 echo "[+] done:"
