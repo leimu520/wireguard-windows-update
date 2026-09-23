@@ -261,6 +261,42 @@ func (s stringSpan) isValidTable() bool {
 	return s.isSame("off") || s.isSame("auto") || s.isSame("main") || s.isValidUint(false, 0, (1<<32)-1)
 }
 
+func (s stringSpan) isValidOnOff() bool {
+	return s.isCaselessSame("on") || s.isCaselessSame("off") ||
+		s.isCaselessSame("true") || s.isCaselessSame("false") ||
+		s.isCaselessSame("yes") || s.isCaselessSame("no") ||
+		s.isSame("1") || s.isSame("0")
+}
+
+// Deliberately loose: enough to catch a pasted blob or a missing scheme, while
+// the real validation happens in conf's parser.
+func (s stringSpan) isValidURL() bool {
+	slash := -1
+	for i := 0; i < s.len; i++ {
+		if *s.at(i) == ' ' || *s.at(i) == '\t' {
+			return false
+		}
+		if *s.at(i) == ':' && i+2 < s.len && *s.at(i + 1) == '/' && *s.at(i + 2) == '/' {
+			slash = i
+			break
+		}
+	}
+	if slash < 1 || slash+3 >= s.len {
+		return false
+	}
+	for i := 0; i < slash; i++ {
+		if !isAlphabet(*s.at(i)) {
+			return false
+		}
+	}
+	for i := slash + 3; i < s.len; i++ {
+		if *s.at(i) == ' ' || *s.at(i) == '\t' {
+			return false
+		}
+	}
+	return true
+}
+
 func (s stringSpan) isValidPersistentKeepAlive() bool {
 	if s.isSame("off") {
 		return true
@@ -366,6 +402,13 @@ const (
 	fieldDNS
 	fieldMTU
 	fieldTable
+	fieldAutoReconnect
+	fieldReconnectMethod
+	fieldReconnectProbe
+	fieldReconnectInterval
+	fieldReconnectTimeout
+	fieldReconnectThreshold
+	fieldReconnectWebhook
 	fieldPreUp
 	fieldPostUp
 	fieldPreDown
@@ -403,6 +446,20 @@ func (s stringSpan) field() field {
 		return fieldMTU
 	case s.isCaselessSame("Table"):
 		return fieldTable
+	case s.isCaselessSame("AutoReconnect"):
+		return fieldAutoReconnect
+	case s.isCaselessSame("ReconnectMethod"):
+		return fieldReconnectMethod
+	case s.isCaselessSame("ReconnectProbe"):
+		return fieldReconnectProbe
+	case s.isCaselessSame("ReconnectInterval"):
+		return fieldReconnectInterval
+	case s.isCaselessSame("ReconnectTimeout"):
+		return fieldReconnectTimeout
+	case s.isCaselessSame("ReconnectThreshold"):
+		return fieldReconnectThreshold
+	case s.isCaselessSame("ReconnectWebhook"):
+		return fieldReconnectWebhook
 	case s.isCaselessSame("PublicKey"):
 		return fieldPublicKey
 	case s.isCaselessSame("PresharedKey"):
@@ -518,6 +575,31 @@ func (hsa *highlightSpanArray) highlightValue(parent, s stringSpan, section fiel
 		hsa.append(parent.s, s, validateHighlight(s.isValidMTU(), highlightMTU))
 	case fieldTable:
 		hsa.append(parent.s, s, validateHighlight(s.isValidTable(), highlightTable))
+	case fieldAutoReconnect:
+		hsa.append(parent.s, s, validateHighlight(s.isValidOnOff(), highlightTable))
+	case fieldReconnectMethod:
+		hsa.append(parent.s, s, validateHighlight(s.isCaselessSame("http") || s.isCaselessSame("tcp"), highlightTable))
+	case fieldReconnectInterval, fieldReconnectTimeout, fieldReconnectThreshold:
+		hsa.append(parent.s, s, validateHighlight(s.isValidUint(false, 1, 65535), highlightKeepalive))
+	case fieldReconnectProbe:
+		// A probe target has the same shape as an endpoint, so colour it the
+		// same way.
+		if !s.isValidEndpoint() {
+			hsa.append(parent.s, s, highlightError)
+			break
+		}
+		probeColon := s.len
+		for probeColon > 0 {
+			probeColon--
+			if *s.at(probeColon) == ':' {
+				break
+			}
+		}
+		hsa.append(parent.s, stringSpan{s.s, probeColon}, highlightHost)
+		hsa.append(parent.s, stringSpan{s.at(probeColon), 1}, highlightDelimiter)
+		hsa.append(parent.s, stringSpan{s.at(probeColon + 1), s.len - probeColon - 1}, highlightPort)
+	case fieldReconnectWebhook:
+		hsa.append(parent.s, s, validateHighlight(s.isValidURL(), highlightCmd))
 	case fieldPreUp, fieldPostUp, fieldPreDown, fieldPostDown:
 		hsa.append(parent.s, s, validateHighlight(s.isValidPrePostUpDown(), highlightCmd))
 	case fieldListenPort:

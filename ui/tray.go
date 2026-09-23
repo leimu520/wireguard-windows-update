@@ -54,7 +54,7 @@ func NewTray(mtw *ManageTunnelsWindow) (*Tray, error) {
 func (tray *Tray) setup() error {
 	tray.clicked = tray.onManageTunnels
 
-	tray.SetToolTip(l18n.Sprintf("WireGuard: Deactivated"))
+	tray.SetToolTip(ProductName + ": " + l18n.Sprintf("Deactivated"))
 	tray.SetVisible(true)
 	if icon, err := loadLogoIcon(16); err == nil {
 		tray.SetIcon(icon)
@@ -288,7 +288,7 @@ func (tray *Tray) updateGlobalState(globalState manager.TunnelState) {
 	actions := tray.ContextMenu().Actions()
 	statusAction := actions.At(0)
 
-	tray.SetToolTip(l18n.Sprintf("WireGuard: %s", textForState(globalState, true)))
+	tray.SetToolTip(ProductName + ": " + textForState(globalState, true))
 	stateText := textForState(globalState, false)
 	stateIcon, err := iconForState(globalState, 16)
 	if err == nil {

@@ -34,7 +34,7 @@ BEGIN \
       VALUE "InternalName", "wireguard-windows" \
       VALUE "LegalCopyright", "Copyright © 2015-2026 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved." \
       VALUE "OriginalFilename", "wireguard.exe" \
-      VALUE "ProductName", "WireGuard" \
+      VALUE "ProductName", "WireGuard 专版" \
       VALUE "ProductVersion", EXPAND(WIREGUARD_VERSION_STR) \
       VALUE "Comments", comments \
     END \
@@ -314,6 +314,6 @@ VERSIONINFO_TEMPLATE(
 LANGUAGE LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED
 VERSIONINFO_TEMPLATE(
   "080404b0", 0x804, 0x4b0,
-  "WireGuard：快速、现代、安全的 VPN 隧道",
+  "WireGuard 专版：端点自动重连",
   "https://www.wireguard.com/"
 )
