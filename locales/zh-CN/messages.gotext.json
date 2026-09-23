@@ -425,6 +425,76 @@
             "translatorComment": "Copied from source."
         },
         {
+            "id": "Invalid on/off value",
+            "message": "Invalid on/off value",
+            "translation": "开/关取值无效"
+        },
+        {
+            "id": "Invalid probe path",
+            "message": "Invalid probe path",
+            "translation": "探测路径无效"
+        },
+        {
+            "id": "Probe method must be http or tcp",
+            "message": "Probe method must be http or tcp",
+            "translation": "探测方式只能是 http 或 tcp"
+        },
+        {
+            "id": "Invalid {What}",
+            "message": "Invalid {What}",
+            "translation": "{What}无效",
+            "placeholders": [
+                {
+                    "id": "What",
+                    "string": "%[1]s",
+                    "type": "string",
+                    "underlyingType": "string",
+                    "argNum": 1,
+                    "expr": "what"
+                }
+            ]
+        },
+        {
+            "id": "{What} must be between 1 and 65535",
+            "message": "{What} must be between 1 and 65535",
+            "translation": "{What}必须在 1 到 65535 之间",
+            "placeholders": [
+                {
+                    "id": "What",
+                    "string": "%[1]s",
+                    "type": "string",
+                    "underlyingType": "string",
+                    "argNum": 1,
+                    "expr": "what"
+                }
+            ]
+        },
+        {
+            "id": "Invalid webhook URL: {Err}",
+            "message": "Invalid webhook URL: {Err}",
+            "translation": "告警地址无效: {Err}",
+            "placeholders": [
+                {
+                    "id": "Err",
+                    "string": "%[1]v",
+                    "type": "error",
+                    "underlyingType": "interface{Error() string}",
+                    "argNum": 1,
+                    "expr": "err"
+                }
+            ]
+        },
+        {
+            "id": "Webhook URL must use http or https",
+            "message": "Webhook URL must use http or https",
+            "translation": "告警地址必须使用 http 或 https"
+        },
+        {
+            "id": "Webhook URL is missing a host",
+            "message": "Webhook URL is missing a host",
+            "translation": "告警地址缺少主机名"
+        },
+        {
             "id": "Invalid key: {Err}",
             "message": "Invalid key: {Err}",
             "translation": "无效的密钥：{Err}",
@@ -475,6 +545,21 @@
             "message": "Key must have a value",
             "translation": "必须有一个值",
             "translatorComment": "Copied from source."
+        },
+        {
+            "id": "probe interval",
+            "message": "probe interval",
+            "translation": "探测间隔"
+        },
+        {
+            "id": "probe timeout",
+            "message": "probe timeout",
+            "translation": "探测超时"
+        },
+        {
+            "id": "failure threshold",
+            "message": "failure threshold",
+            "translation": "失败阈值"
         },
         {
             "id": "Invalid key for [Interface] section",
@@ -1083,10 +1168,451 @@
             ]
         },
         {
-            "id": "WireGuard: Deactivated",
-            "message": "WireGuard: Deactivated",
-            "translation": "WireGuard: 已断开",
-            "translatorComment": "Copied from source."
+            "id": "Reconnect status – {Name}",
+            "message": "Reconnect status – {Name}",
+            "translation": "重连检测状态 - {Name}",
+            "placeholders": [
+                {
+                    "id": "Name",
+                    "string": "%[1]s",
+                    "type": "string",
+                    "underlyingType": "string",
+                    "argNum": 1,
+                    "expr": "tunnel.Name"
+                }
+            ]
+        },
+        {
+            "id": "Tunnel:",
+            "message": "Tunnel:",
+            "translation": "隧道:"
+        },
+        {
+            "id": "Automatic reconnect:",
+            "message": "Automatic reconnect:",
+            "translation": "自动重连:"
+        },
+        {
+            "id": "Probe method:",
+            "message": "Probe method:",
+            "translation": "探测方式:"
+        },
+        {
+            "id": "Probe target:",
+            "message": "Probe target:",
+            "translation": "探测地址:"
+        },
+        {
+            "id": "Probe interval:",
+            "message": "Probe interval:",
+            "translation": "探测间隔:"
+        },
+        {
+            "id": "Probe timeout:",
+            "message": "Probe timeout:",
+            "translation": "探测超时:"
+        },
+        {
+            "id": "Failures tolerated:",
+            "message": "Failures tolerated:",
+            "translation": "容忍失败次数:"
+        },
+        {
+            "id": "Current endpoint:",
+            "message": "Current endpoint:",
+            "translation": "当前对端地址:"
+        },
+        {
+            "id": "Last handshake:",
+            "message": "Last handshake:",
+            "translation": "上次握手:"
+        },
+        {
+            "id": "Traffic:",
+            "message": "Traffic:",
+            "translation": "流量:"
+        },
+        {
+            "id": "Probe result:",
+            "message": "Probe result:",
+            "translation": "探测结果:"
+        },
+        {
+            "id": "Latency:",
+            "message": "Latency:",
+            "translation": "延迟:"
+        },
+        {
+            "id": "Failures in a row:",
+            "message": "Failures in a row:",
+            "translation": "连续失败:"
+        },
+        {
+            "id": "Assessment:",
+            "message": "Assessment:",
+            "translation": "判定:"
+        },
+        {
+            "id": "Shows what the tunnel check is seeing. The actual checking and reconnecting is done by the tunnel service.",
+            "message": "Shows what the tunnel check is seeing. The actual checking and reconnecting is done by the tunnel service.",
+            "translation": "显示隧道检测的结果。实际的检测与重连由隧道服务执行。"
+        },
+        {
+            "id": "\u0026Probe now",
+            "message": "\u0026Probe now",
+            "translation": "立即探测 (\u0026P)"
+        },
+        {
+            "id": "disabled",
+            "message": "disabled",
+            "translation": "已停用"
+        },
+        {
+            "id": "not used, judging by handshake age",
+            "message": "not used, judging by handshake age",
+            "translation": "未启用，按握手时间判定"
+        },
+        {
+            "id": "not configured",
+            "message": "not configured",
+            "translation": "未配置"
+        },
+        {
+            "id": "no probe target is configured",
+            "message": "no probe target is configured",
+            "translation": "未配置探测地址"
+        },
+        {
+            "id": "no probe configured",
+            "message": "no probe configured",
+            "translation": "未配置探测"
+        },
+        {
+            "id": "(unavailable: {RuntimeErr})",
+            "message": "(unavailable: {RuntimeErr})",
+            "translation": "(不可用: {RuntimeErr})",
+            "placeholders": [
+                {
+                    "id": "RuntimeErr",
+                    "string": "%[1]v",
+                    "type": "error",
+                    "underlyingType": "interface{Error() string}",
+                    "argNum": 1,
+                    "expr": "runtimeErr"
+                }
+            ]
+        },
+        {
+            "id": "(unavailable)",
+            "message": "(unavailable)",
+            "translation": "(不可用)"
+        },
+        {
+            "id": "the tunnel is not running",
+            "message": "the tunnel is not running",
+            "translation": "隧道未在运行"
+        },
+        {
+            "id": "(none)",
+            "message": "(none)",
+            "translation": "(无)"
+        },
+        {
+            "id": "no peer in the running configuration",
+            "message": "no peer in the running configuration",
+            "translation": "运行中的配置里没有对端"
+        },
+        {
+            "id": "never",
+            "message": "never",
+            "translation": "从未"
+        },
+        {
+            "id": "received {String}, sent {String_1}",
+            "message": "received {String}, sent {String_1}",
+            "translation": "接收 {String}，发送 {String_1}",
+            "placeholders": [
+                {
+                    "id": "String",
+                    "string": "%[1]s",
+                    "type": "string",
+                    "underlyingType": "string",
+                    "argNum": 1,
+                    "expr": "peer.RxBytes.String()"
+                },
+                {
+                    "id": "String_1",
+                    "string": "%[2]s",
+                    "type": "string",
+                    "underlyingType": "string",
+                    "argNum": 2,
+                    "expr": "peer.TxBytes.String()"
+                }
+            ]
+        },
+        {
+            "id": "Shows what the tunnel check is seeing. The actual checking and reconnecting is done by the tunnel service. Last check: {Format150405}",
+            "message": "Shows what the tunnel check is seeing. The actual checking and reconnecting is done by the tunnel service. Last check: {Format150405}",
+            "translation": "显示隧道检测的结果。实际的检测与重连由隧道服务执行。最近检查: {Format150405}",
+            "placeholders": [
+                {
+                    "id": "Format150405",
+                    "string": "%[1]s",
+                    "type": "string",
+                    "underlyingType": "string",
+                    "argNum": 1,
+                    "expr": "time.Now().Format(\"15:04:05\")"
+                }
+            ]
+        },
+        {
+            "id": "the tunnel is carrying traffic",
+            "message": "the tunnel is carrying traffic",
+            "translation": "隧道正在正常传输"
+        },
+        {
+            "id": "no answer yet ({Streak} of {Threshold} failures)",
+            "message": "no answer yet ({Streak} of {Threshold} failures)",
+            "translation": "尚未响应（{Streak}/{Threshold} 次失败）",
+            "placeholders": [
+                {
+                    "id": "Streak",
+                    "string": "%[1]d",
+                    "type": "int",
+                    "underlyingType": "int",
+                    "argNum": 1,
+                    "expr": "dlg.streak"
+                },
+                {
+                    "id": "Threshold",
+                    "string": "%[2]d",
+                    "type": "int",
+                    "underlyingType": "int",
+                    "argNum": 2,
+                    "expr": "dlg.setting.threshold"
+                }
+            ]
+        },
+        {
+            "id": "the tunnel looks down; the service should be re-resolving the endpoint",
+            "message": "the tunnel looks down; the service should be re-resolving the endpoint",
+            "translation": "隧道看起来已断，服务应当正在重新解析对端地址"
+        },
+        {
+            "id": "cannot be judged: no probe target and no PersistentKeepalive",
+            "message": "cannot be judged: no probe target and no PersistentKeepalive",
+            "translation": "无法判定: 既没有探测地址，也没有设置 PersistentKeepalive"
+        },
+        {
+            "id": "no handshake has completed yet",
+            "message": "no handshake has completed yet",
+            "translation": "还没有完成过握手"
+        },
+        {
+            "id": "no handshake for {Second}, past the {Threshold} threshold",
+            "message": "no handshake for {Second}, past the {Threshold} threshold",
+            "translation": "已 {Second} 没有握手，超过 {Threshold} 的阈值",
+            "placeholders": [
+                {
+                    "id": "Second",
+                    "string": "%[1]v",
+                    "type": "time.Duration",
+                    "underlyingType": "int64",
+                    "argNum": 1,
+                    "expr": "age.Round(time.Second)"
+                },
+                {
+                    "id": "Threshold",
+                    "string": "%[2]v",
+                    "type": "time.Duration",
+                    "underlyingType": "int64",
+                    "argNum": 2,
+                    "expr": "threshold"
+                }
+            ]
+        },
+        {
+            "id": "Reconnect settings – {Name}",
+            "message": "Reconnect settings – {Name}",
+            "translation": "重连参数 - {Name}",
+            "placeholders": [
+                {
+                    "id": "Name",
+                    "string": "%[1]s",
+                    "type": "string",
+                    "underlyingType": "string",
+                    "argNum": 1,
+                    "expr": "tunnel.Name"
+                }
+            ]
+        },
+        {
+            "id": "\u0026Reconnect automatically if the endpoint address changes",
+            "message": "\u0026Reconnect automatically if the endpoint address changes",
+            "translation": "对端地址变化时自动重连 (\u0026R)"
+        },
+        {
+            "id": "Applies to this tunnel only, and is stored in its configuration as AutoReconnect. The tunnel service reads it, so changing it restarts the tunnel.",
+            "message": "Applies to this tunnel only, and is stored in its configuration as AutoReconnect. The tunnel service reads it, so changing it restarts the tunnel.",
+            "translation": "只对本隧道生效，作为 AutoReconnect 存在它的配置里。该设置由隧道服务读取，因此修改后会重启隧道。"
+        },
+        {
+            "id": "Probe \u0026target:",
+            "message": "Probe \u0026target:",
+            "translation": "探测地址 (\u0026T):"
+        },
+        {
+            "id": "Something inside the tunnel that answers, such as 10.122.10.1:80, optionally with a path for the HTTP method, such as 10.122.10.1:80/healthz. Leave it empty to judge the tunnel by handshake age instead.",
+            "message": "Something inside the tunnel that answers, such as 10.122.10.1:80, optionally with a path for the HTTP method, such as 10.122.10.1:80/healthz. Leave it empty to judge the tunnel by handshake age instead.",
+            "translation": "隧道内一个会响应的地址，例如 10.122.10.1:80；用 HTTP 方式时可以带路径，例如 10.122.10.1:80/healthz。留空则改为按握手时间判定。"
+        },
+        {
+            "id": "Probe \u0026interval (seconds):",
+            "message": "Probe \u0026interval (seconds):",
+            "translation": "探测间隔（秒）(\u0026I):"
+        },
+        {
+            "id": "How often the tunnel service probes. Empty means {Seconds}.",
+            "message": "How often the tunnel service probes. Empty means {Seconds}.",
+            "translation": "隧道服务多久探测一次。留空表示 {Seconds}。",
+            "placeholders": [
+                {
+                    "id": "Seconds",
+                    "string": "%[1]d",
+                    "type": "int",
+                    "underlyingType": "int",
+                    "argNum": 1,
+                    "expr": "int(reconnect.DefaultInterval.Seconds())"
+                }
+            ]
+        },
+        {
+            "id": "Probe \u0026timeout (seconds):",
+            "message": "Probe \u0026timeout (seconds):",
+            "translation": "探测超时（秒）(\u0026O):"
+        },
+        {
+            "id": "How long a single probe may take before it counts as a failure. Empty means {Seconds}; it is capped at the interval.",
+            "message": "How long a single probe may take before it counts as a failure. Empty means {Seconds}; it is capped at the interval.",
+            "translation": "单次探测最多等多久，超过算失败。留空表示 {Seconds}；会被限制在不超过探测间隔。",
+            "placeholders": [
+                {
+                    "id": "Seconds",
+                    "string": "%[1]d",
+                    "type": "int",
+                    "underlyingType": "int",
+                    "argNum": 1,
+                    "expr": "int(reconnect.DefaultTimeout.Seconds())"
+                }
+            ]
+        },
+        {
+            "id": "Failures \u0026tolerated:",
+            "message": "Failures \u0026tolerated:",
+            "translation": "容忍失败次数 (\u0026F):"
+        },
+        {
+            "id": "How many probes in a row may fail before the service re-resolves the endpoint. Empty means {DefaultThreshold}.",
+            "message": "How many probes in a row may fail before the service re-resolves the endpoint. Empty means {DefaultThreshold}.",
+            "translation": "连续失败多少次后服务才重新解析对端地址。留空表示 {DefaultThreshold}。",
+            "placeholders": [
+                {
+                    "id": "DefaultThreshold",
+                    "string": "%[1]d",
+                    "type": "int",
+                    "underlyingType": "int",
+                    "argNum": 1,
+                    "expr": "reconnect.DefaultThreshold"
+                }
+            ]
+        },
+        {
+            "id": "\u0026Webhook:",
+            "message": "\u0026Webhook:",
+            "translation": "告警地址 (\u0026W):"
+        },
+        {
+            "id": "Optional URL that receives a text message whenever the tunnel is declared down, recovers, or fails to recover.",
+            "message": "Optional URL that receives a text message whenever the tunnel is declared down, recovers, or fails to recover.",
+            "translation": "可选。隧道被判定断开、恢复、或恢复失败时，向该地址推送一条文本消息。"
+        },
+        {
+            "id": "Probe \u0026method:",
+            "message": "Probe \u0026method:",
+            "translation": "探测方式 (\u0026M):"
+        },
+        {
+            "id": "HTTP request (any answer counts)",
+            "message": "HTTP request (any answer counts)",
+            "translation": "HTTP 请求（任何响应都算通）"
+        },
+        {
+            "id": "TCP connection",
+            "message": "TCP connection",
+            "translation": "TCP 连接"
+        },
+        {
+            "id": "Invalid probe interval",
+            "message": "Invalid probe interval",
+            "translation": "探测间隔无效"
+        },
+        {
+            "id": "Invalid probe timeout",
+            "message": "Invalid probe timeout",
+            "translation": "探测超时无效"
+        },
+        {
+            "id": "Invalid failure threshold",
+            "message": "Invalid failure threshold",
+            "translation": "失败阈值无效"
+        },
+        {
+            "id": "Invalid probe target",
+            "message": "Invalid probe target",
+            "translation": "探测地址无效"
+        },
+        {
+            "id": "‘{Text}’ is not a whole number",
+            "message": "‘{Text}’ is not a whole number",
+            "translation": "「{Text}」不是整数",
+            "placeholders": [
+                {
+                    "id": "Text",
+                    "string": "%[1]s",
+                    "type": "string",
+                    "underlyingType": "string",
+                    "argNum": 1,
+                    "expr": "text"
+                }
+            ]
+        },
+        {
+            "id": "The value has to be between {Min} and {Max}",
+            "message": "The value has to be between {Min} and {Max}",
+            "translation": "取值必须在 {Min} 到 {Max} 之间",
+            "placeholders": [
+                {
+                    "id": "Min",
+                    "string": "%[1]d",
+                    "type": "int",
+                    "underlyingType": "int",
+                    "argNum": 1,
+                    "expr": "min"
+                },
+                {
+                    "id": "Max",
+                    "string": "%[2]d",
+                    "type": "int",
+                    "underlyingType": "int",
+                    "argNum": 2,
+                    "expr": "max"
+                }
+            ]
+        },
+        {
+            "id": "Deactivated",
+            "message": "Deactivated",
+            "translation": "已断开"
         },
         {
             "id": "Status: Unknown",
@@ -1175,22 +1701,6 @@
             "translatorComment": "Copied from source."
         },
         {
-            "id": "WireGuard: {TextForStateglobalState_true}",
-            "message": "WireGuard: {TextForStateglobalState_true}",
-            "translation": "WireGuard: {TextForStateglobalState_true}",
-            "translatorComment": "Copied from source.",
-            "placeholders": [
-                {
-                    "id": "TextForStateglobalState_true",
-                    "string": "%[1]s",
-                    "type": "string",
-                    "underlyingType": "string",
-                    "argNum": 1,
-                    "expr": "textForState(globalState, true)"
-                }
-            ]
-        },
-        {
             "id": "Status: {StateText}",
             "message": "Status: {StateText}",
             "translation": "状态: {StateText}",
@@ -1245,6 +1755,26 @@
             "message": "Tunnels",
             "translation": "隧道",
             "translatorComment": "Copied from source."
+        },
+        {
+            "id": "\u0026Reconnect status",
+            "message": "\u0026Reconnect status",
+            "translation": "隧道检测状态 (\u0026R)"
+        },
+        {
+            "id": "Probe this tunnel from the inside and show what comes back: the current endpoint, how long ago the last handshake was, whether a probe answers and how long it takes. Refreshes on its own.",
+            "message": "Probe this tunnel from the inside and show what comes back: the current endpoint, how long ago the last handshake was, whether a probe answers and how long it takes. Refreshes on its own.",
+            "translation": "从隧道内部探测这条隧道并显示结果: 当前对端地址、上次握手距今多久、探测是否有响应以及耗时。会自动刷新。"
+        },
+        {
+            "id": "Reconnect \u0026parameters",
+            "message": "Reconnect \u0026parameters",
+            "translation": "参数编辑 (\u0026P)"
+        },
+        {
+            "id": "Turn automatic reconnecting on or off for this tunnel, and change what is probed, how often, with what timeout, and after how many failures something is done about it.",
+            "message": "Turn automatic reconnecting on or off for this tunnel, and change what is probed, how often, with what timeout, and after how many failures something is done about it.",
+            "translation": "打开或关闭这条隧道的自动重连，并设置探测什么、多久探一次、超时多久、连续失败多少次才动作。"
         },
         {
             "id": "\u0026Edit",
@@ -1616,22 +2146,6 @@
             "translatorComment": "Copied from source."
         },
         {
-            "id": "{Title} (unsigned build, no updates)",
-            "message": "{Title} (unsigned build, no updates)",
-            "translation": "{Title} (未签名版本，禁用自动更新)",
-            "translatorComment": "Copied from source.",
-            "placeholders": [
-                {
-                    "id": "Title",
-                    "string": "%[1]s",
-                    "type": "string",
-                    "underlyingType": "string",
-                    "argNum": 1,
-                    "expr": "mtw.Title()"
-                }
-            ]
-        },
-        {
             "id": "Error Exiting WireGuard",
             "message": "Error Exiting WireGuard",
             "translation": "退出 WireGuard 时出错",
@@ -1710,6 +2224,82 @@
             "message": "Status: Complete!",
             "translation": "状态: 完成！",
             "translatorComment": "Copied from source."
+        },
+        {
+            "id": "http2: Framer {F}: failed to decode just-written frame",
+            "message": "http2: Framer {F}: failed to decode just-written frame",
+            "translation": "",
+            "placeholders": [
+                {
+                    "id": "F",
+                    "string": "%[1]p",
+                    "type": "*net/http/internal/http2.Framer",
+                    "underlyingType": "*net/http/internal/http2.Framer",
+                    "argNum": 1,
+                    "expr": "f"
+                }
+            ]
+        },
+        {
+            "id": "http2: Framer {F}: wrote {SummarizeFramefr}",
+            "message": "http2: Framer {F}: wrote {SummarizeFramefr}",
+            "translation": "",
+            "placeholders": [
+                {
+                    "id": "F",
+                    "string": "%[1]p",
+                    "type": "*net/http/internal/http2.Framer",
+                    "underlyingType": "*net/http/internal/http2.Framer",
+                    "argNum": 1,
+                    "expr": "f"
+                },
+                {
+                    "id": "SummarizeFramefr",
+                    "string": "%[2]v",
+                    "type": "string",
+                    "underlyingType": "string",
+                    "argNum": 2,
+                    "expr": "summarizeFrame(fr)"
+                }
+            ]
+        },
+        {
+            "id": "http2: Framer {Fr}: read {SummarizeFramef}",
+            "message": "http2: Framer {Fr}: read {SummarizeFramef}",
+            "translation": "",
+            "placeholders": [
+                {
+                    "id": "Fr",
+                    "string": "%[1]p",
+                    "type": "*net/http/internal/http2.Framer",
+                    "underlyingType": "*net/http/internal/http2.Framer",
+                    "argNum": 1,
+                    "expr": "fr"
+                },
+                {
+                    "id": "SummarizeFramef",
+                    "string": "%[2]v",
+                    "type": "string",
+                    "underlyingType": "string",
+                    "argNum": 2,
+                    "expr": "summarizeFrame(f)"
+                }
+            ]
+        },
+        {
+            "id": "http2: decoded hpack field {HeaderField}",
+            "message": "http2: decoded hpack field {HeaderField}",
+            "translation": "",
+            "placeholders": [
+                {
+                    "id": "HeaderField",
+                    "string": "%+[1]v",
+                    "type": "vendor/golang.org/x/net/http2/hpack.HeaderField",
+                    "underlyingType": "struct{Name string; Value string; Sensitive bool}",
+                    "argNum": 1,
+                    "expr": "hf"
+                }
+            ]
         }
     ]
 }
