@@ -42,6 +42,7 @@ jobs:
           set -e
           mkdir -p dist
           cp amd64/wireguard.exe dist/
+          cp install.bat dist/
           cp deploy-zhuanban.ps1 dist/
           cp README.md dist/
           cp docs/autoreconnect.md dist/
