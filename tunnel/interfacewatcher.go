@@ -115,7 +115,11 @@ func watchInterface() (*interfaceWatcher, error) {
 
 		if state, err := iw.adapter.AdapterState(); err == nil && state == driver.AdapterStateDown {
 			log.Println("Reinitializing adapter configuration")
+			// The reconnect watchdog rewrites endpoints in the same config, so
+			// serialise the two writers.
+			configMutationLock.Lock()
 			err = iw.adapter.SetConfiguration(iw.conf.ToDriverConfiguration())
+			configMutationLock.Unlock()
 			if err != nil {
 				log.Println(fmt.Errorf("%v: %w", services.ErrorDeviceSetConfig, err))
 			}
