@@ -19,10 +19,11 @@ jobs:
         with:
           python-version: "3.13"
 
-      # build-amd64.sh fetches its own Go, LLVM-mingw, ImageMagick and
-      # WireGuardNT, each verified against a sha256, and then assembles the
-      # resource section. shell: bash on a Windows runner is Git Bash, which is
-      # the environment the script was written for.
+      # build-amd64.sh fetches its own Go, LLVM-mingw, ImageMagick, WireGuardNT,
+      # make and the wireguard-tools sources, each verified against a sha256,
+      # then assembles the resource section and compiles wg.exe. shell: bash on
+      # a Windows runner is Git Bash, which is the environment the script was
+      # written for.
       - name: Build
         shell: bash
         run: ./build-amd64.sh
@@ -57,6 +58,9 @@ jobs:
           if (-not (Test-Path $exe)) { throw "the MSI did not unpack a wireguard.exe" }
           Write-Output ("wireguard.exe inside the MSI: " + (Get-Item $exe).Length + " bytes")
           Write-Output ("sha256: " + (Get-FileHash $exe).Hash)
+          $wg = Join-Path $extract 'WireGuard\wg.exe'
+          if (-not (Test-Path $wg)) { throw "the MSI did not unpack a wg.exe" }
+          Write-Output ("wg.exe inside the MSI: " + (Get-Item $wg).Length + " bytes")
 
       - name: Package
         shell: bash
@@ -64,6 +68,7 @@ jobs:
           set -e
           mkdir -p dist
           cp amd64/wireguard.exe dist/
+          cp amd64/wg.exe dist/
           cp install.bat dist/
           cp deploy-zhuanban.ps1 dist/
           cp README.md dist/

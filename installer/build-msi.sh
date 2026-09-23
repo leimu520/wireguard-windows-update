@@ -8,14 +8,10 @@
 #   * amd64 only, like the rest of this repository;
 #   * the WiX zip is unpacked with Python, because in a Git Bash environment GNU
 #     tar shadows the bsdtar in System32 and cannot read the archive;
-#   * nothing is signed, since there is no certificate here;
-#   * the .wxs has no wg.exe component: the source for that tool is in the
-#     upstream Windows client repository and is not present in this tree. See
-#     the note in wireguard.wxs for what that costs, which is only the command
-#     line tool.
+#   * nothing is signed, since there is no certificate here.
 #
-# Prerequisites: run ./build-amd64.sh first, so that amd64/wireguard.exe and
-# ui/icon/wireguard.ico exist.
+# Prerequisites: run ./build-amd64.sh first, so that amd64/wireguard.exe,
+# amd64/wg.exe and ui/icon/wireguard.ico exist.
 #
 # Usage:  ./installer/build-msi.sh
 
@@ -61,7 +57,7 @@ if [ -z "$VERSION" ]; then
 fi
 echo "[+] version $VERSION"
 
-for required in "$ROOT/$PLATFORM/wireguard.exe" "$ROOT/ui/icon/wireguard.ico"; do
+for required in "$ROOT/$PLATFORM/wireguard.exe" "$ROOT/$PLATFORM/wg.exe" "$ROOT/ui/icon/wireguard.ico"; do
 	if [ ! -f "$required" ]; then
 		echo "error: $required is missing; run ./build-amd64.sh first" >&2
 		exit 1
