@@ -7,7 +7,6 @@ package conf
 
 import (
 	"log"
-	"net/netip"
 	"time"
 	"unsafe"
 
@@ -43,7 +42,15 @@ func resolveHostname(name string) (resolvedIPString string, err error) {
 	return
 }
 
-func resolveHostnameOnce(name string) (resolvedIPString string, err error) {
+// resolveHostnameCandidates returns every address the system resolver offered,
+// IPv4 addresses before IPv6 ones and each group in the order the resolver gave
+// them, with duplicates removed.
+//
+// The list matters rather than just its first element because a name that is
+// being repointed can briefly answer with the old address and the new one at
+// the same time, and a caller that has already established the old address does
+// not work wants to be able to pick the other one.
+func resolveHostnameCandidates(name string) (addresses []string, err error) {
 	hints := windows.AddrinfoW{
 		Family:   windows.AF_UNSPEC,
 		Socktype: windows.SOCK_DGRAM,
@@ -52,34 +59,48 @@ func resolveHostnameOnce(name string) (resolvedIPString string, err error) {
 	var result *windows.AddrinfoW
 	name16, err := windows.UTF16PtrFromString(name)
 	if err != nil {
-		return
+		return nil, err
 	}
 	err = windows.GetAddrInfoW(name16, nil, &hints, &result)
 	if err != nil {
-		return
+		return nil, err
 	}
 	if result == nil {
-		err = windows.WSAHOST_NOT_FOUND
-		return
+		return nil, windows.WSAHOST_NOT_FOUND
 	}
 	defer windows.FreeAddrInfoW(result)
-	var v6 netip.Addr
+
+	var v4, v6 []string
+	seen := make(map[string]bool)
 	for ; result != nil; result = result.Next {
 		if result.Family != windows.AF_INET && result.Family != windows.AF_INET6 {
 			continue
 		}
 		addr := (*winipcfg.RawSockaddrInet)(unsafe.Pointer(result.Addr)).Addr()
+		text := addr.String()
+		if seen[text] {
+			continue
+		}
+		seen[text] = true
 		if addr.Is4() {
-			return addr.String(), nil
-		} else if !v6.IsValid() && addr.Is6() {
-			v6 = addr
+			v4 = append(v4, text)
+		} else if addr.Is6() {
+			v6 = append(v6, text)
 		}
 	}
-	if v6.IsValid() {
-		return v6.String(), nil
+	addresses = append(v4, v6...)
+	if len(addresses) == 0 {
+		return nil, windows.WSAHOST_NOT_FOUND
 	}
-	err = windows.WSAHOST_NOT_FOUND
-	return
+	return addresses, nil
+}
+
+func resolveHostnameOnce(name string) (resolvedIPString string, err error) {
+	addresses, err := resolveHostnameCandidates(name)
+	if err != nil {
+		return "", err
+	}
+	return addresses[0], nil
 }
 
 func (config *Config) ResolveEndpoints() error {
@@ -92,6 +113,36 @@ func (config *Config) ResolveEndpoints() error {
 		if err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// ResolveHostnameOnce performs a single, non-retrying lookup through the system
+// resolver. Unlike resolveHostname it does not sleep and retry for up to forty
+// seconds, which makes it suitable for runtime use where the caller drives its
+// own retry and fallback policy.
+func ResolveHostnameOnce(name string) (string, error) {
+	return resolveHostnameOnce(name)
+}
+
+// ResolveHostnameCandidates is ResolveHostnameOnce without the narrowing: it
+// hands back every address the resolver offered instead of the first one, so
+// that a caller which already knows the first address is dead can pick another.
+func ResolveHostnameCandidates(name string) ([]string, error) {
+	return resolveHostnameCandidates(name)
+}
+
+// FlushResolverCache drops the DNS client resolver cache of the calling user.
+// Endpoint hostnames are resolved once at tunnel startup, so without dropping
+// the cache a changed A record can stay masked by the stale answer for as long
+// as its TTL, which is exactly the case runtime endpoint re-resolution exists
+// to handle.
+func FlushResolverCache() error {
+	dnsapi := windows.NewLazySystemDLL("dnsapi.dll")
+	flush := dnsapi.NewProc("DnsFlushResolverCache")
+	ret, _, err := flush.Call()
+	if ret == 0 {
+		return err
 	}
 	return nil
 }
