@@ -36,6 +36,28 @@ jobs:
         run: |
           python .github/check-resources.py
 
+      - name: Build the MSI installer
+        shell: bash
+        run: ./installer/build-msi.sh
+
+      # An MSI that does not open is worse than no MSI, because it fails on the
+      # user's machine rather than here. Administrative install unpacks it
+      # without registering anything, which is enough to prove it is readable
+      # and that the executable inside is the one we just built.
+      - name: Verify the MSI opens and carries the executable
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem installer/dist/*.msi | Select-Object -First 1
+          if (-not $msi) { throw "no MSI was produced" }
+          Write-Output ("checking " + $msi.Name + " (" + $msi.Length + " bytes)")
+          $extract = Join-Path $env:RUNNER_TEMP 'msi-extract'
+          & msiexec.exe /a "$($msi.FullName)" /qn TARGETDIR="$extract"
+          Start-Sleep -Seconds 8
+          $exe = Join-Path $extract 'WireGuard\wireguard.exe'
+          if (-not (Test-Path $exe)) { throw "the MSI did not unpack a wireguard.exe" }
+          Write-Output ("wireguard.exe inside the MSI: " + (Get-Item $exe).Length + " bytes")
+          Write-Output ("sha256: " + (Get-FileHash $exe).Hash)
+
       - name: Package
         shell: bash
         run: |
@@ -46,6 +68,7 @@ jobs:
           cp deploy-zhuanban.ps1 dist/
           cp README.md dist/
           cp docs/autoreconnect.md dist/
+          cp installer/dist/*.msi dist/
           powershell -NoProfile -Command "Compress-Archive -Path dist/* -DestinationPath wireguard-zhuanban-amd64.zip -Force"
           ls -l wireguard-zhuanban-amd64.zip
           sha256sum wireguard-zhuanban-amd64.zip

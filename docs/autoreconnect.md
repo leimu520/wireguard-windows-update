@@ -305,8 +305,32 @@ ImageMagick（SVG→ICO）、WireGuardNT（要嵌入的 dll/sys）。全部带 s
 
 ## 部署与回滚
 
+有两种方式，按需要选一种。
+
+### 方式一：MSI 安装包
+
+`installer/` 里有完整的 WiX 定义，`./installer/build-msi.sh` 产出
+`installer/dist/wireguard-amd64-<版本>.msi`（CI 也会一并构建并发布）。它沿用官方的 UpgradeCode，
+所以能**正常覆盖/升级官方版本**，装完出现在「应用」列表里，可以正常卸载。
+
+实测（2026-09-23，在本机覆盖官方版安装）：**隧道配置完好**（`Data` 目录没被动）、服务自动重启、
+看门狗正常起来、开始菜单快捷方式已创建。两个需要注意的代价：
+
+- **不含 `wg.exe`**。上游 Windows 仓库的根目录里没有 `wg/`（命令行工具的源码不在其中），
+  所以没有东西可以构建它，也不适合把官方签名过的那个打包进来。用这个 MSI 覆盖官方版时，
+  官方 MSI 的卸载流程会把它的 `wg.exe` 一并带走 —— 这是**唯一的功能损失**，
+  命令行能看的信息在 GUI 的「隧道检测状态」里都有。想保留 `wg.exe` 就用方式二，
+  或从官方 MSI 里取回来：`msiexec /a wireguard-amd64-1.1.1.msi /qn TARGETDIR=%TEMP%\wg`
+  然后复制 `%TEMP%\wg\WireGuard\wg.exe`。
+- **卸载会删配置**。`RemoveConfigFolder` 会递归删除 `Data` 目录（`customactions.c`，官方行为），
+  卸载前先在 GUI 里导出隧道。**升级安装不会触发它**：`EvaluateWireGuardComponents` 只在组件状态是
+  "将被卸载"（`INSTALLSTATE_REMOVED`）时才设置那几个属性，升级时是"将被安装"。
+
+### 方式二：替换可执行文件
+
 **已装官方版的机器，直接覆盖这个 exe 就行**，不需要卸载、不需要重装、配置文件与 WireGuardNT
 驱动都不动：换掉的只有 `wireguard.exe` 一个文件，它跟驱动之间的接口和官方版完全一样。
+这种方式**不会碰 `wg.exe`**。
 
 **最省事的做法是双击 `install.bat`**（它自己请求管理员权限）。有个常见误解值得先澄清：
 `wireguard.exe` **不是安装程序**，双击它是"启动客户端"，不会注册服务、不会往别处复制文件。
