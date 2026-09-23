@@ -1,0 +1,72 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows-amd64:
+    name: windows amd64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # build-amd64.sh fetches its own Go, LLVM-mingw, ImageMagick and
+      # WireGuardNT, each verified against a sha256, and then assembles the
+      # resource section. shell: bash on a Windows runner is Git Bash, which is
+      # the environment the script was written for.
+      - name: Build
+        shell: bash
+        run: ./build-amd64.sh
+
+      # The resource section is the part that fails silently if it is missing:
+      # no manifest means the window falls back to the old common controls, and
+      # no icon group means no tray icon at all. So check that it is really
+      # there rather than trusting the build to have done it.
+      - name: Verify the resources are in the executable
+        shell: bash
+        run: |
+          python .github/check-resources.py
+
+      - name: Package
+        shell: bash
+        run: |
+          set -e
+          mkdir -p dist
+          cp amd64/wireguard.exe dist/
+          cp deploy-zhuanban.ps1 dist/
+          cp README.md dist/
+          cp docs/autoreconnect.md dist/
+          powershell -NoProfile -Command "Compress-Archive -Path dist/* -DestinationPath wireguard-zhuanban-amd64.zip -Force"
+          ls -l wireguard-zhuanban-amd64.zip
+          sha256sum wireguard-zhuanban-amd64.zip
+
+      - name: Upload as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wireguard-zhuanban-amd64
+          path: wireguard-zhuanban-amd64.zip
+          if-no-files-found: error
+
+      # A release asset can be fetched with a plain URL, which is what makes
+      # "download the build" a one-liner rather than an API call with a token.
+      - name: Publish to the rolling release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          gh release view zhuanban-latest >/dev/null 2>&1 || \
+            gh release create zhuanban-latest \
+              --title "WireGuard 专版 — 最新构建" \
+              --notes "由 GitHub Actions 从 master 自动构建。安装方式：解压后以管理员身份运行 deploy-zhuanban.ps1。详细说明见包内的 docs/autoreconnect.md。"
+          gh release upload zhuanban-latest wireguard-zhuanban-amd64.zip --clobber
+          gh release view zhuanban-latest --json assets --jq '.assets[] | .name + "  " + (.size|tostring) + " bytes"'
