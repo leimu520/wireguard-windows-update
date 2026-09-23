@@ -80,7 +80,7 @@
 `wireguard.exe` 的构建是可复现的，可以用哈希核对（源码不变则哈希不变）：
 
 ```text
-SHA256: b187c096db278145ec9fba79329e57c79b9d56444b4295ee76e7c309df1fd27b
+SHA256: 8368c4fc40b021b181c2b163fd3ef7b7a1963f66b90453d390393cfbab964a26
 ```
 
 若确认为误报，建议向 Microsoft 提交纠正：

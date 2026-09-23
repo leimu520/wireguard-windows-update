@@ -28,7 +28,7 @@ BEGIN \
   BEGIN \
     BLOCK block_id \
     BEGIN \
-      VALUE "CompanyName", "WireGuard LLC" \
+      VALUE "CompanyName", "leimu520" \
       VALUE "FileDescription", file_desc \
       VALUE "FileVersion", EXPAND(WIREGUARD_VERSION_STR) \
       VALUE "InternalName", "wireguard-windows" \
