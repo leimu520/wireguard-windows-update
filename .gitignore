@@ -15,3 +15,6 @@
 *.syso
 .idea
 *.ico
+
+# Agent workspace state
+/.workbuddy
