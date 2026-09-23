@@ -80,10 +80,21 @@
 				</File>
 				<ServiceControl Id="DummyService.3AA0C492_29F4_4342_B608_DB95B2DECB13" Name="DummyService.3AA0C492_29F4_4342_B608_DB95B2DECB13" /><!-- A dummy to make WiX create ServiceControl table for us. -->
 			</Component>
-			<Component Directory="WireGuardFolder" Id="WgExecutable" Guid="540cf446-fcc3-4452-b9fb-eb4c02780251">
-				<File Source="..\$(var.WIREGUARD_PLATFORM)\wg.exe" KeyPath="yes" />
-				<Environment Id="PATH" Name="PATH" System="yes" Action="set" Part="last" Permanent="no" Value="[WireGuardFolder]" />
-			</Component>
+			<!--
+				The stock installer also ships wg.exe, the command line tool, and
+				adds this folder to PATH for it. Neither is possible here: the
+				source for wg.exe lives in the Windows client repository upstream,
+				and this tree does not contain that directory, so there is nothing
+				to build it from. Packing the signed one out of an existing
+				installation is not an option either.
+
+				Leaving it out costs only the command line tool. The client itself
+				has everything, including a status dialog that reports the same
+				handshake age and traffic counters that wg show prints. And on a
+				machine that already had the official build installed, wg.exe is
+				still there afterwards, because this package does not manage that
+				file and so does not remove it.
+			-->
 		</ComponentGroup>
 
 		<!--
