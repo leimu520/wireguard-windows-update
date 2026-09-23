@@ -33,6 +33,7 @@ func (service *tunnelService) Execute(args []string, r <-chan svc.ChangeRequest,
 	changes <- svc.Status{State: serviceState}
 
 	var watcher *interfaceWatcher
+	var reconnector *reconnectWatcher
 	var adapter *driver.Adapter
 	var luid winipcfg.LUID
 	var config *conf.Config
@@ -80,6 +81,9 @@ func (service *tunnelService) Execute(args []string, r <-chan svc.ChangeRequest,
 			}
 		}()
 
+		if reconnector != nil {
+			reconnector.Stop()
+		}
 		if logErr == nil && adapter != nil && config != nil {
 			logErr = runScriptCommand(config.Interface.PreDown, config.Name)
 		}
@@ -145,6 +149,9 @@ func (service *tunnelService) Execute(args []string, r <-chan svc.ChangeRequest,
 	}
 
 	log.Println("Resolving DNS names")
+	// Endpoint hostnames are about to be replaced by the addresses they resolve
+	// to, so keep a copy if they are needed for runtime re-resolution later.
+	reconnectHosts := snapshotEndpointHostnames(config)
 	err = config.ResolveEndpoints()
 	if err != nil {
 		serviceError = services.ErrorDNSLookup
@@ -212,6 +219,17 @@ func (service *tunnelService) Execute(args []string, r <-chan svc.ChangeRequest,
 		return
 	}
 	watcher.Configure(adapter, config, luid)
+
+	if config.Interface.AutoReconnectOff {
+		log.Println("Auto-reconnect is disabled by configuration")
+	} else {
+		reconnector = newReconnectWatcher(adapter, config, reconnectHosts)
+		if reconnector == nil {
+			log.Println("Auto-reconnect: no peer uses a hostname endpoint, so there is nothing to re-resolve")
+		} else {
+			reconnector.Start()
+		}
+	}
 
 	err = runScriptCommand(config.Interface.PostUp, config.Name)
 	if err != nil {
