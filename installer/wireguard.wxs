@@ -28,7 +28,7 @@
 		Name="WireGuard"
 		Language="1033"
 		Version="$(var.WIREGUARD_VERSION)"
-		Manufacturer="WireGuard LLC"
+		Manufacturer="leimu520"
 		UpgradeCode="$(var.UpgradeCode)">
 		<Package
 			InstallerVersion="500"
