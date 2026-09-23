@@ -87,15 +87,28 @@ jobs:
 
       # A release asset can be fetched with a plain URL, which is what makes
       # "download the build" a one-liner rather than an API call with a token.
+      # The notes are refreshed on every run, not only at creation, so the
+      # install instructions on the release page cannot drift behind the
+      # scripts in the archive.
       - name: Publish to the rolling release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES: |
+            由 GitHub Actions 从 master 自动构建，内含 wireguard.exe、wg.exe 命令行工具和 MSI 安装包。
+
+            **安装（先把 zip 解压出来，不要在压缩包里直接双击）：**
+
+            - 全新安装或覆盖官方版：双击 `wireguard-amd64-1.1.1.msi`
+            - 已装官方版、不想产生安装记录：双击 `install.bat`（需要管理员）
+
+            升级覆盖不影响隧道配置；**卸载会删除隧道配置**，卸载前先在 GUI 里导出。
+            安装过程会重启 WireGuard，隧道断几秒后自动恢复。构建没有代码签名，
+            可能被杀毒软件误报，核对方法见 README；详细文档见包内 `autoreconnect.md`。
         run: |
           set -e
           gh release view zhuanban-latest >/dev/null 2>&1 || \
-            gh release create zhuanban-latest \
-              --title "WireGuard 专版 — 最新构建" \
-              --notes "由 GitHub Actions 从 master 自动构建。安装方式：解压后以管理员身份运行 deploy-zhuanban.ps1。详细说明见包内的 docs/autoreconnect.md。"
+            gh release create zhuanban-latest --title "WireGuard 专版 — 最新构建"
+          gh release edit zhuanban-latest --title "WireGuard 专版 — 最新构建" --notes "$RELEASE_NOTES"
           gh release upload zhuanban-latest wireguard-zhuanban-amd64.zip --clobber
           gh release view zhuanban-latest --json assets --jq '.assets[] | .name + "  " + (.size|tostring) + " bytes"'
