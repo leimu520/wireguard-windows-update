@@ -71,6 +71,21 @@
 在 Git Bash 里运行，需要联网下载工具链（Go、llvm-mingw 等，均带 sha256 校验）。
 推送到 master 后 GitHub Actions 会自动构建并更新 Release。
 
+## 关于杀毒软件误报
+
+此构建没有代码签名，可能被杀毒软件按启发式规则报毒，例如
+`Trojan:Script/Wacatac.H!ml`。名字以 `!ml` 结尾的判定来自机器学习模型而非病毒特征码，
+对未签名的少见程序很常见。
+
+`wireguard.exe` 的构建是可复现的，可以用哈希核对（源码不变则哈希不变）：
+
+```text
+SHA256: b187c096db278145ec9fba79329e57c79b9d56444b4295ee76e7c309df1fd27b
+```
+
+若确认为误报，建议向 Microsoft 提交纠正：
+[提交文件样本](https://www.microsoft.com/en-us/wdsi/filesubmission)。
+
 ## 文档
 
 `docs/autoreconnect.md`：设计说明、配置参考、部署与回滚、测试情况、已知限制。
