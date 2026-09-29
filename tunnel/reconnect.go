@@ -45,7 +45,7 @@ import (
 //   - With ReconnectProbe set, the watchdog probes that host:port inside the
 //     tunnel, over HTTP by default and over TCP when ReconnectMethod says so.
 //     That is the direct question "does the tunnel still pass traffic", and it
-//     is what the router-side script does.
+//     is what the reference script does.
 //   - Without it, the watchdog uses the age of the peer's last handshake. This
 //     needs PersistentKeepalive to be set on the peer, because a session that
 //     is carrying nothing does not handshake on its own; the watchdog says so
@@ -79,7 +79,7 @@ const (
 	// remote endpoint) and answers nothing, while the very retry traffic that
 	// is trying to fix the tunnel keeps that poisoned mapping alive. A fresh
 	// source port creates a fresh mapping, which is what repaired tunnels on
-	// the router-side deployments of this same feature. The client is the
+	// the reference deployments of this same feature. The client is the
 	// handshake initiator, so the far end roams to whatever port the packets
 	// come from and nothing on the server side needs to change.
 	reconnectPortRotateAfter = 3
@@ -269,7 +269,7 @@ func (rw *reconnectWatcher) run() {
 	var silenceUntil time.Time
 	lastSilenceAttempt := 0
 
-	// How long the tunnel has been down, for the same reason the router-side
+	// How long the tunnel has been down, for the same reason the reference
 	// script reports a duration: it is the number you look at afterwards.
 	sinceDown := func() string {
 		if downAt.IsZero() {
@@ -371,7 +371,7 @@ func (rw *reconnectWatcher) run() {
 		}
 		lastAttempt = time.Now()
 		attempts++
-		// The escalation the router-side script uses, plus two rungs it cannot
+		// The escalation the reference script uses, plus two rungs it cannot
 		// pull from a shell script: a plain re-apply first, then tear the peer
 		// down and build it again, then bind a new source port so the wedged
 		// mapping on the path stops being matched at all, and finally go
@@ -515,7 +515,7 @@ func (s *reconnectPeerState) hasHandshake() bool {
 // whether the tunnel came back: that is decided by the next health check.
 //
 // With force set, the peers are rebuilt from scratch rather than updated in
-// place. That is the equivalent of the force branch in the router-side script,
+// place. That is the equivalent of the force branch in the reference script,
 // which deletes the peer and sets it up again, and it throws away the session
 // and its handshake state along the way.
 //
@@ -644,7 +644,7 @@ func describeEndpoint(host string) string {
 }
 
 // resolveEndpointHost resolves host through the system resolver and then through
-// two independent HTTP resolvers, mirroring the fallback chain the router-side
+// two independent HTTP resolvers, mirroring the fallback chain the reference
 // script uses.
 //
 // current is the address the tunnel is already using, and it is known to be

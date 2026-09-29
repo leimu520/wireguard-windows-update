@@ -50,7 +50,7 @@
 | 键 | 默认 | 说明 |
 | --- | --- | --- |
 | AutoReconnect | on | 总开关 |
-| ReconnectProbe | 空 | 隧道内探测地址，如 `10.122.10.1:80` |
+| ReconnectProbe | 空 | 隧道内探测地址，如 `198.51.100.1:80` |
 | ReconnectMethod | http | `http`（收到任何响应都算通）或 `tcp` |
 | ReconnectInterval | 5 | 探测间隔（秒） |
 | ReconnectTimeout | 3 | 单次探测超时（秒） |

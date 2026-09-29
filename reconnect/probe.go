@@ -26,7 +26,7 @@ const (
 	MethodTCP  Method = "tcp"
 )
 
-// Defaults follow the router-side shell script that this feature replaces: ask
+// Defaults follow the reference shell script that this feature replaces: ask
 // an address inside the tunnel over HTTP, every five seconds, giving up after
 // three, and only do something about it after three failures in a row.
 const (
