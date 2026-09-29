@@ -7,6 +7,8 @@ package tunnel
 
 import (
 	"bytes"
+	crand "crypto/rand"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +17,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -68,6 +71,32 @@ const (
 	// the one that is already in the configuration.
 	reconnectMinBackoff = 15 * time.Second
 	reconnectMaxBackoff = 60 * time.Second
+	// reconnectPortRotateAfter is the attempt number the watchdog starts
+	// rotating the listen port from. Rebuilding the peer twice with the same
+	// five-tuple has already failed by then, which is the situation where the
+	// path itself has wedged on that tuple: a stateful middlebox between here
+	// and the endpoint holds a dead mapping for (local address, listen port,
+	// remote endpoint) and answers nothing, while the very retry traffic that
+	// is trying to fix the tunnel keeps that poisoned mapping alive. A fresh
+	// source port creates a fresh mapping, which is what repaired tunnels on
+	// the router-side deployments of this same feature. The client is the
+	// handshake initiator, so the far end roams to whatever port the packets
+	// come from and nothing on the server side needs to change.
+	reconnectPortRotateAfter = 3
+	// reconnectSilenceAfter and reconnectSilenceWindow define the last rung,
+	// the Windows translation of what rebooting a machine buys on the path.
+	// Port rotation escapes a single dead mapping, but if several fresh ports
+	// all fail the same way, something on the path is wedged more broadly
+	// (an over-eager connection tracker, a per-host UDP state table). While
+	// the client keeps sending handshakes, that state never gets a chance to
+	// expire: the retry traffic is exactly what keeps it alive. This rung
+	// takes the peers away entirely, so nothing leaves the UDP socket for
+	// reconnectSilenceWindow — comfortably longer than the 30 to 120 seconds
+	// consumer firewalls and NATs hold UDP state for — and then rebuilds the
+	// session on a fresh port. It is what the shutdown-to-boot gap did by
+	// accident on the day this feature was designed from a live outage.
+	reconnectSilenceAfter   = 6
+	reconnectSilenceWindow  = 120 * time.Second
 	// reconnectHTTPTimeout bounds one DNS-over-HTTPS or webhook request.
 	reconnectHTTPTimeout = 5 * time.Second
 )
@@ -234,6 +263,11 @@ func (rw *reconnectWatcher) run() {
 	// downNotified marks that the current outage has already been announced, so
 	// that a long one sends a single DOWN notification and keeps one start time.
 	downNotified := false
+	// silenceUntil holds the deadline of the quiet window while one is in
+	// progress. Non-zero means the peers have been stripped and the watchdog
+	// deliberately sends nothing until the deadline passes.
+	var silenceUntil time.Time
+	lastSilenceAttempt := 0
 
 	// How long the tunnel has been down, for the same reason the router-side
 	// script reports a duration: it is the number you look at afterwards.
@@ -261,17 +295,33 @@ func (rw *reconnectWatcher) run() {
 
 		states, healthy, detail := rw.inspect()
 		if healthy {
-			if streak >= rw.threshold {
-				log.Printf("Auto-reconnect: the tunnel is carrying traffic again after %s down and %d failed checks", sinceDown(), streak)
-				postWebhook(rw.config, "RECOVERED", fmt.Sprintf("Fail Count: %d\nDuration: %s\nDetail: %s", streak, sinceDown(), detail))
+			if silenceUntil.IsZero() {
+				if streak >= rw.threshold {
+					log.Printf("Auto-reconnect: the tunnel is carrying traffic again after %s down and %d failed checks", sinceDown(), streak)
+					postWebhook(rw.config, "RECOVERED", fmt.Sprintf("Fail Count: %d\nDuration: %s\nDetail: %s", streak, sinceDown(), detail))
+				}
+				streak = 0
+				attempts = 0
+				// lastSilenceAttempt must be reset along with attempts, or the
+				// quiet window of a later outage would not open until attempt
+				// lastSilenceAttempt + reconnectSilenceAfter of that outage —
+				// a threshold that keeps drifting further out with every
+				// outage that used the window.
+				lastSilenceAttempt = 0
+				backoff = reconnectMinBackoff
+				awaitingOutcome = false
+				downNotified = false
+				downAt = time.Time{}
+				continue
 			}
-			streak = 0
-			attempts = 0
-			backoff = reconnectMinBackoff
-			awaitingOutcome = false
-			downNotified = false
-			downAt = time.Time{}
-			continue
+			// A quiet window is open, which means the driver currently holds
+			// no peers at all, so this "healthy" verdict is an artifact of
+			// inspecting an empty configuration — there is no handshake age
+			// to be stale and no session to carry probe traffic. Treat it as
+			// still down and let the window logic below decide when to
+			// rebuild; skipping this would reset the recovery bookkeeping and
+			// leave the tunnel peerless forever. The window-opening log
+			// already explains this, so it is not repeated on every check.
 		}
 
 		// The tunnel is still down, so an attempt made before this check did not
@@ -304,19 +354,66 @@ func (rw *reconnectWatcher) run() {
 				postWebhook(rw.config, "DOWN", fmt.Sprintf("Fail Count: %d\nDetail: %s\nAction: Re-resolving endpoint and reconnecting", streak, detail))
 			}
 		}
+		// While a quiet window is open the watchdog deliberately does nothing:
+		// no lookups, no writes, no handshake traffic from the driver. The
+		// point of the window is that the path's state for the dead tuple
+		// expires in the absence of traffic, and every packet sent during it
+		// would cancel exactly that expiry.
+		if !silenceUntil.IsZero() {
+			if time.Now().Before(silenceUntil) {
+				continue
+			}
+			silenceUntil = time.Time{}
+			log.Println("Auto-reconnect: the silence window is over, rebuilding the session on a fresh source port")
+		}
 		if !lastAttempt.IsZero() && time.Since(lastAttempt) < backoff {
 			continue
 		}
 		lastAttempt = time.Now()
 		attempts++
-		// The same escalation the router-side script uses: a plain re-apply
-		// first, and only if that did not bring the tunnel back, tear the peer
-		// down and build it again.
+		// The escalation the router-side script uses, plus two rungs it cannot
+		// pull from a shell script: a plain re-apply first, then tear the peer
+		// down and build it again, then bind a new source port so the wedged
+		// mapping on the path stops being matched at all, and finally go
+		// completely quiet for longer than the path holds UDP state — the one
+		// thing a reboot does that no recovery from inside a running service
+		// could mimic until now.
 		force := attempts > 1
+		rotatePort := attempts > reconnectPortRotateAfter
 
-		ok, report := rw.recover(states, force)
+		// Enough rotations have failed that the path is wedged beyond a single
+		// dead tuple. Strip the peers, let the path forget everything, and
+		// rebuild on the next attempt after the window.
+		if silenceUntil.IsZero() && silenceDue(attempts, lastSilenceAttempt) {
+			// The attempt budget is spent whether or not the strip lands: if
+			// the driver refuses the zero-peer write, retrying it on every
+			// attempt would turn the escalation into a strip loop instead of
+			// the ordinary attempt that follows.
+			lastSilenceAttempt = attempts
+			okStrip, stripReport := rw.recover(states, false, false, true)
+			if okStrip {
+				silenceUntil = time.Now().Add(reconnectSilenceWindow)
+				log.Printf("Auto-reconnect: %d consecutive attempts with rotated ports did not help; going quiet for %v so the path's UDP state expires, then rebuilding", attempts-1, reconnectSilenceWindow)
+				resyncSystemClock()
+				// Report the streak before clearing it. During the window the
+				// health checks keep failing (there is no peer to pass traffic
+				// through), which is expected and harmless: nothing is sent.
+				awaitingOutcome = true
+				postWebhook(rw.config, "RECOVERY ATTEMPTED", fmt.Sprintf("%s\nGoing quiet for %v to expire the path's UDP state\nFail Count: %d\nDuration: %s", stripReport, reconnectSilenceWindow, streak, sinceDown()))
+				streak = 0
+				continue
+			}
+			// Stripping the peers failed, which is itself diagnostic: fall
+			// through to an ordinary attempt and try the quiet window again
+			// after another full round of rotations.
+			log.Printf("Auto-reconnect: unable to strip the peers for the silence window, continuing with ordinary attempts: %s", stripReport)
+		}
+
+		ok, report := rw.recover(states, force, rotatePort, false)
 		if ok {
-			if force {
+			if rotatePort {
+				log.Printf("Auto-reconnect: endpoint re-applied on a new source port, waiting for a handshake")
+			} else if force {
 				log.Printf("Auto-reconnect: endpoint re-applied and the peer rebuilt from scratch, waiting for a handshake")
 			} else {
 				log.Printf("Auto-reconnect: endpoint re-applied, waiting for a handshake")
@@ -373,6 +470,14 @@ func (rw *reconnectWatcher) inspect() ([]reconnectPeerState, bool, string) {
 		if probe != "" {
 			result := reconnect.Probe(rw.method, probe, rw.timeout)
 			if !result.Healthy() {
+				// A fresh handshake changes the meaning of the failure: the
+				// tunnel itself is up, so endpoint surgery on our side has
+				// nothing to fix. Name that in the detail so the log and the
+				// webhook point at the probe target or the far end instead of
+				// inviting another round of endpoint recovery.
+				if state.hasHandshake() && time.Since(state.lastHandshake) < reconnect.HandshakeThreshold(state.persistentKeepalive) {
+					return states, false, fmt.Sprintf("probe %s failed: %v (the handshake with %s is fresh, so the tunnel itself is up and the failure is beyond it)", probe, result.Err, host)
+				}
 				return states, false, fmt.Sprintf("probe %s failed: %v", probe, result.Err)
 			}
 			continue
@@ -413,8 +518,41 @@ func (s *reconnectPeerState) hasHandshake() bool {
 // place. That is the equivalent of the force branch in the router-side script,
 // which deletes the peer and sets it up again, and it throws away the session
 // and its handshake state along the way.
-func (rw *reconnectWatcher) recover(states []reconnectPeerState, force bool) (bool, string) {
+//
+// With rotatePort set, the listen port is rebound to a fresh random value in
+// the same call. Everything else about the configuration stays put, so from
+// the driver's point of view this is just another configuration write; from
+// the path's point of view it is a different five-tuple, which is the only
+// thing that helps when a middlebox holds a dead mapping for the old one.
+// The rotation applies to the runtime configuration only: the stored
+// configuration keeps its original port, so a manual deactivate/activate or a
+// reboot puts it back.
+//
+// With strip set, the peers are removed and nothing is re-added: the driver
+// stops sending on the UDP socket entirely, so every stateful device on the
+// path can finally age out whatever it holds for the old tuple. The caller
+// waits reconnectSilenceWindow before calling again, and the next ordinary
+// call rebuilds the peers. Endpoint resolution is skipped on this rung —
+// there is nothing to send the answer to — so the report is short by design.
+// The stored configuration is never touched by any of these rungs.
+func (rw *reconnectWatcher) recover(states []reconnectPeerState, force, rotatePort, strip bool) (bool, string) {
 	var report strings.Builder
+	if strip {
+		configMutationLock.Lock()
+		// REPLACE_PEERS with a zero peer count is "remove everything, add
+		// nothing": the buffer still carries the peer blobs ToDriverConfiguration
+		// wrote, but the driver reads exactly PeerCount of them, which is none.
+		interfaze, size := rw.config.ToDriverConfiguration()
+		interfaze.Flags |= driver.InterfaceReplacePeers
+		interfaze.PeerCount = 0
+		err := rw.adapter.SetConfiguration(interfaze, size)
+		configMutationLock.Unlock()
+		if err != nil {
+			return false, "unable to remove the peers for the silence window: " + err.Error()
+		}
+		log.Println("Auto-reconnect: peers removed, the UDP socket goes quiet so the path's state can expire")
+		return true, "peers removed so every stateful device on the path ages out its UDP state"
+	}
 	resolved := make(map[conf.Key]string, len(rw.hosts))
 	for i := range rw.config.Peers {
 		peer := &rw.config.Peers[i]
@@ -459,12 +597,27 @@ func (rw *reconnectWatcher) recover(states []reconnectPeerState, force bool) (bo
 		report.WriteString("\nrebuilt the peer from scratch instead of updating it in place")
 		log.Println("Auto-reconnect: rebuilding the peer from scratch")
 	}
+	var newPort uint16
+	if rotatePort {
+		port, err := randomListenPort(rw.config.Interface.ListenPort)
+		if err != nil {
+			report.WriteString("\nlisten port rotation skipped: " + err.Error())
+			log.Printf("Auto-reconnect: unable to pick a new listen port: %v", err)
+		} else {
+			newPort = port
+			fmt.Fprintf(&report, "\nlisten port rotated from %d to %d to escape a stale mapping on the path", rw.config.Interface.ListenPort, port)
+			log.Printf("Auto-reconnect: rotating the listen port from %d to %d, the path holds a dead mapping for the old one", rw.config.Interface.ListenPort, port)
+		}
+	}
 
 	configMutationLock.Lock()
 	for i := range rw.config.Peers {
 		if address, ok := resolved[rw.config.Peers[i].PublicKey]; ok {
 			rw.config.Peers[i].Endpoint.Host = address
 		}
+	}
+	if newPort != 0 {
+		rw.config.Interface.ListenPort = newPort
 	}
 	interfaze, size := rw.config.ToDriverConfiguration()
 	if force {
@@ -627,6 +780,60 @@ func resolveViaIPAPI(host string) ([]string, error) {
 		return []string{address.String()}, nil
 	}
 	return nil, fmt.Errorf("unexpected response %q", text)
+}
+
+// randomListenPort draws a port for the listen-port rotation. Ports below
+// 10240 stay out of the way of well-known services, and the port currently
+// bound is excluded because reusing it would re-match the very mapping the
+// rotation is trying to escape. The draw is retried rather than remapped so
+// that the values stay uniformly distributed over the whole usable range.
+func randomListenPort(current uint16) (uint16, error) {
+	for i := 0; i < 32; i++ {
+		var b [2]byte
+		if _, err := crand.Read(b[:]); err != nil {
+			return 0, err
+		}
+		port := uint16(b[0])<<8 | uint16(b[1])
+		if port < 10240 || port == current {
+			continue
+		}
+		return port, nil
+	}
+	return 0, errors.New("no usable port drawn after 32 tries")
+}
+
+// silenceDue reports whether attempt number attempts should open the quiet
+// window. It fires once reconnectSilenceAfter attempts have passed since the
+// last window was attempted — opened or refused, both spend the round — so
+// that a driver refusing the zero-peer write is retried after another full
+// round of rotations rather than on every attempt.
+func silenceDue(attempts, lastSilenceAttempt int) bool {
+	return attempts > reconnectSilenceAfter && attempts-lastSilenceAttempt >= reconnectSilenceAfter
+}
+
+// resyncSystemClock asks the Windows time service to step the clock. It is
+// called when the watchdog reaches the silence rung, because one of the ways
+// handshakes can fail silently is a clock that stepped backwards: the peer
+// replay window rejects any timestamp older than the greatest one it has seen,
+// and no amount of rebuilding on our side helps while the clock is still
+// wrong. Removing and re-adding the peer in the force rung clears the stored
+// greatest-timestamp, so the pairing of the two rungs covers the backward
+// step: resync corrects the clock, the rebuild clears the window. Failure is
+// logged and never affects the recovery path — the Windows time service may
+// not be running, and the rung is a best effort on a side hypothesis.
+func resyncSystemClock() {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	// The absolute path is deliberate: this runs as LocalSystem and should
+	// not depend on what the service's PATH happens to contain.
+	cmd := exec.CommandContext(ctx, `C:\Windows\System32\w32tm.exe`, "/resync")
+	output, err := cmd.CombinedOutput()
+	text := strings.TrimSpace(string(output))
+	if err != nil {
+		log.Printf("Auto-reconnect: the best-effort time resync failed: %v (%s)", err, text)
+		return
+	}
+	log.Printf("Auto-reconnect: best-effort time resync: %s", text)
 }
 
 // postWebhook reports a state change to ReconnectWebhook when one is
