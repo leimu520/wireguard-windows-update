@@ -72,6 +72,7 @@ jobs:
           cp install.bat dist/
           cp deploy-zhuanban.ps1 dist/
           cp README.md dist/
+          cp CHANGELOG.md dist/
           cp docs/autoreconnect.md dist/
           cp installer/dist/*.msi dist/
           powershell -NoProfile -Command "Compress-Archive -Path dist/* -DestinationPath wireguard-zhuanban-amd64.zip -Force"
@@ -109,6 +110,16 @@ jobs:
           set -e
           gh release view zhuanban-latest >/dev/null 2>&1 || \
             gh release create zhuanban-latest --title "WireGuard 专版 — 最新构建"
-          gh release edit zhuanban-latest --title "WireGuard 专版 — 最新构建" --notes "$RELEASE_NOTES"
+          # The release page must say what actually changed, not only repeat
+          # the install instructions: take the newest section of CHANGELOG.md
+          # (everything from its first "## " heading up to the next one) and
+          # append it, stamped with the commit the build came from.
+          # Assembled into a file and passed via --notes-file: a multi-line
+          # inline string in this YAML would either need careful indentation
+          # or breaks the block scalar.
+          CHANGELOG=$(awk '/^## /{c++} c==1{print} c==2{exit}' CHANGELOG.md)
+          printf '%s\n\n---\n\n## 本版更新（构建 %s，完整历史见仓库 CHANGELOG.md）\n\n%s\n' \
+            "$RELEASE_NOTES" "${GITHUB_SHA:0:7}" "$CHANGELOG" > release-notes.txt
+          gh release edit zhuanban-latest --title "WireGuard 专版 — 最新构建" --notes-file release-notes.txt
           gh release upload zhuanban-latest wireguard-zhuanban-amd64.zip --clobber
           gh release view zhuanban-latest --json assets --jq '.assets[] | .name + "  " + (.size|tostring) + " bytes"'
